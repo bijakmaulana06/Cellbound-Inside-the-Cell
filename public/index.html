@@ -1,0 +1,321 @@
+<!DOCTYPE html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>CELLBOUND – Zona 1: The Explorer</title>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#04141f;--ink:#e8fbff;--mut:#8fb7c4;--acc:#4ff0d0;--acc2:#ffb347;color-scheme:dark;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font-family:Sora,system-ui,sans-serif;overflow:hidden}
+canvas{display:block;position:fixed;inset:0;touch-action:none}
+.hud{position:fixed;left:12px;top:calc(12px + env(safe-area-inset-top,0px));background:rgba(6,30,44,.8);border:1px solid #1d5b70;border-radius:14px;padding:10px 14px;font-size:13px;backdrop-filter:blur(6px);max-width:310px}
+.hud b{color:var(--acc);font-size:11px;letter-spacing:.12em}.hud ul{list-style:none;margin:6px 0 0;padding:0;columns:2;column-gap:14px}.hud li{opacity:.55;margin:2px 0;font-size:12px;break-inside:avoid}.hud li.ok{opacity:1;color:var(--acc)}
+.bar{margin-top:8px;height:5px;background:#12384a;border-radius:9px;overflow:hidden}.bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--acc),var(--acc2));transition:width .5s}
+#q{position:fixed;top:calc(12px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);width:min(560px,92vw);background:rgba(6,30,44,.9);border:1px solid var(--acc2);border-radius:14px;padding:12px 16px;font-size:15px;display:none;text-align:center}
+#q small{color:var(--acc2);display:block;letter-spacing:.1em;margin-bottom:4px}
+#act{position:fixed;left:50%;bottom:calc(28px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);display:none}
+button{font:600 15px Sora,system-ui,sans-serif;background:var(--acc);color:#032a30;border:0;border-radius:999px;padding:12px 22px;cursor:pointer;box-shadow:0 0 24px rgba(79,240,208,.45)}
+button.alt{background:transparent;color:var(--ink);border:1px solid #2a7189;box-shadow:none}button:disabled{opacity:.4;cursor:default}
+.ov{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(2,12,18,.72);backdrop-filter:blur(5px);padding:16px}
+.card{width:min(520px,100%);background:#06202e;border:1px solid #1d5b70;border-radius:20px;padding:24px;box-shadow:0 20px 80px #000a;max-height:88vh;overflow:auto}
+.card .tag{display:inline-block;font-size:11px;letter-spacing:.12em;color:#032a30;background:var(--acc2);padding:3px 10px;border-radius:99px;font-weight:800}
+.card h2{margin:10px 0 8px;font-size:24px}.card p{line-height:1.6;color:#cfeaf1;margin:8px 0}
+.fact{background:#0a3347;border-left:3px solid var(--acc);padding:10px 14px;border-radius:8px;font-size:14px}
+.row{display:flex;gap:10px;margin-top:16px;flex-wrap:wrap}
+#toast{position:fixed;left:50%;bottom:calc(90px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);width:min(520px,92vw);background:rgba(6,30,44,.95);border:1px solid var(--acc);border-radius:14px;padding:12px 16px;font-size:14px;line-height:1.5;display:none;text-align:center}
+#toast.bad{border-color:#ff6b6b}
+.lbl{position:fixed;left:0;top:0;pointer-events:none;font-size:12px;font-weight:600;background:rgba(6,30,44,.75);border:1px solid var(--acc);color:var(--acc);padding:3px 9px;border-radius:99px;white-space:nowrap;display:none}
+#help{position:fixed;right:12px;bottom:calc(12px + env(safe-area-inset-bottom,0px));font-size:11px;color:var(--mut);text-align:right}
+.ill{border-radius:14px;overflow:hidden;background:radial-gradient(circle at 50% 40%,#0c4a63,#04141f);border:1px solid #1d5b70;margin-bottom:14px}
+.card{animation:pop .4s cubic-bezier(.2,1.4,.4,1)}@keyframes pop{from{transform:translateY(18px) scale(.92);opacity:0}to{transform:none;opacity:1}}
+#emo{position:fixed;left:12px;bottom:calc(12px + env(safe-area-inset-bottom,0px));display:none;gap:6px}#emo button{padding:8px 11px;font-size:18px;background:rgba(6,30,44,.85);border:1px solid #1d5b70;box-shadow:none}.card input{width:100%;box-sizing:border-box;margin:6px 0;padding:12px 14px;border-radius:12px;border:1px solid #2a7189;background:#04141f;color:var(--ink);font:600 16px Sora,system-ui,sans-serif}
+</style></head><body>
+<div class="hud" id="hud"><b>ZONA 1 · THE EXPLORER</b><ul id="list"></ul><div class="bar"><i id="pb"></i></div></div>
+<div id="q"></div><button id="act">E · Pelajari</button><div id="toast"></div><div id="lbls"></div>
+<div id="help">WASD / panah · klik lantai untuk berjalan · E berinteraksi · dekati sorot jingga lalu tekan E</div>
+<div class="ov" id="ov"><div class="card" id="card"></div></div>
+<script src="three.min.js"></script><script src="lib/GLTFLoader.js"></script><script src="lib/SkeletonUtils.js"></script><script src="lib/CopyShader.js"></script><script src="lib/LuminosityHighPassShader.js"></script><script src="lib/EffectComposer.js"></script><script src="lib/RenderPass.js"></script><script src="lib/ShaderPass.js"></script><script src="lib/UnrealBloomPass.js"></script>
+<script>
+const $=id=>document.getElementById(id);
+window.onerror=(m,s,l)=>{const d=document.createElement('div');d.style.cssText='position:fixed;left:8px;right:8px;bottom:8px;z-index:99;background:#7a1020;color:#fff;padding:10px;border-radius:8px;font:12px monospace';d.textContent='Error: '+m+' (baris '+l+')';document.body.appendChild(d)};
+const T=THREE;
+function rd(){const u=Math.random()*2-1,a=Math.random()*Math.PI*2,s=Math.sqrt(1-u*u);return new T.Vector3(s*Math.cos(a),u,s*Math.sin(a))}
+const R=new T.WebGLRenderer({antialias:true});R.setPixelRatio(Math.min(devicePixelRatio,2));R.setSize(innerWidth,innerHeight);document.body.prepend(R.domElement);
+const S=new T.Scene();S.background=new T.Color(0x04141f);S.fog=new T.FogExp2(0x04202e,.014);
+const C=new T.PerspectiveCamera(50,innerWidth/innerHeight,.1,400);
+S.add(new T.HemisphereLight(0x99ffee,0x103040,.6));
+const sun=new T.DirectionalLight(0xffffff,.6);sun.position.set(10,25,10);S.add(sun);
+const A=26,B=19,Y=new T.Vector3(0,1,0);
+const mk=(g,c,o={})=>new T.Mesh(g,new T.MeshStandardMaterial(Object.assign({color:c,roughness:.5,metalness:.1},o)));
+// sitoplasma (lantai)
+const ground=mk(new T.CircleGeometry(1,96),0x0b3b4f,{emissive:0x052233,transparent:true,opacity:.92});
+ground.scale.set(A,B,1);ground.rotation.x=-Math.PI/2;ground.userData={id:'sitoplasma',ground:true};S.add(ground);
+for(let i=1;i<5;i++){const r=mk(new T.RingGeometry(i/5-.004,i/5,96),0x1e7f92,{transparent:true,opacity:.25,emissive:0x1e7f92});r.scale.set(A,B,1);r.rotation.x=-Math.PI/2;r.position.y=.02;S.add(r)}
+// membran: lapisan ganda fosfolipid
+const N=160,heads=new T.InstancedMesh(new T.SphereGeometry(.42,10,8),new T.MeshStandardMaterial({color:0xffb36b,emissive:0x5a2a08,roughness:.4}),N*2),
+tails=new T.InstancedMesh(new T.CylinderGeometry(.09,.09,.9,6),new T.MeshStandardMaterial({color:0xffe6b0}),N*2),d=new T.Object3D();
+for(let i=0;i<N;i++){const t=i/N*Math.PI*2,p=new T.Vector3(A*Math.cos(t),1.1,B*Math.sin(t)),n=new T.Vector3(Math.cos(t)/A,0,Math.sin(t)/B).normalize();
+ [1,-1].forEach((s,k)=>{d.quaternion.identity();d.position.copy(p).addScaledVector(n,s*1);d.updateMatrix();heads.setMatrixAt(i*2+k,d.matrix);
+  d.position.copy(p).addScaledVector(n,s*.45);d.quaternion.setFromUnitVectors(Y,n);d.updateMatrix();tails.setMatrixAt(i*2+k,d.matrix)})}
+heads.userData=tails.userData={id:'membran'};S.add(heads,tails);
+const wall=mk(new T.CylinderGeometry(1,1,2.6,96,1,true),0x4ff0d0,{transparent:true,opacity:.1,side:T.DoubleSide,depthWrite:false,emissive:0x1a8f80});
+wall.scale.set(A,1,B);wall.position.y=1.3;wall.userData={id:'membran'};S.add(wall);
+// kanal protein
+const ca=3.5,cp=new T.Vector3(A*Math.cos(ca),1.1,B*Math.sin(ca)),cn=new T.Vector3(Math.cos(ca)/A,0,Math.sin(ca)/B).normalize();
+const chan=new T.Group();const cb=mk(new T.CylinderGeometry(1,1.1,3.2,20,1,true),0xff5fa2,{emissive:0x6a1040,side:T.DoubleSide});
+const cr=mk(new T.TorusGeometry(1,.22,10,24),0xffa6d0,{emissive:0xaa3070});cr.rotation.x=Math.PI/2;cr.position.y=1.6;chan.add(cb,cr);
+chan.position.copy(cp);chan.quaternion.setFromUnitVectors(Y,cn);chan.userData={id:'membran'};S.add(chan);
+// nukleus
+const NC=new T.Vector3(7,3,-2),nuc=new T.Group();nuc.position.copy(NC);nuc.userData={id:'nukleus'};
+const sg=new T.SphereGeometry(5.5,64,40),pa=sg.attributes.position,v=new T.Vector3();
+for(let i=0;i<pa.count;i++){v.fromBufferAttribute(pa,i);const k=1+.04*Math.sin(v.x*1.3)*Math.cos(v.y*1.7+v.z);v.multiplyScalar(k);pa.setXYZ(i,v.x,v.y,v.z)}sg.computeVertexNormals();
+const shell=mk(sg,0x8a6bff,{transparent:true,opacity:.4,emissive:0x2a1a77,depthWrite:false,roughness:.2});
+const shell2=mk(new T.SphereGeometry(5.75,32,20),0xb7a3ff,{transparent:true,opacity:.12,wireframe:true,depthWrite:false});
+nuc.add(shell,shell2);
+for(let i=0;i<34;i++){const dir=rd(),p=mk(new T.TorusGeometry(.3,.09,8,14),0xffe27a,{emissive:0x886a10});p.position.copy(dir).multiplyScalar(5.55);p.quaternion.setFromUnitVectors(new T.Vector3(0,0,1),dir);nuc.add(p)}
+const chro=mk(new T.TorusKnotGeometry(2.6,.12,220,8,3,5),0xff7ad9,{emissive:0x8a2a70});nuc.add(chro);
+const nucleolus=mk(new T.SphereGeometry(1.5,32,24),0xff9d3c,{emissive:0x9a4a08,roughness:.6});nucleolus.position.set(.9,.2,.6);nucleolus.userData={id:'nukleolus'};nuc.add(nucleolus);
+const nl=new T.PointLight(0xff9d3c,.8,10);nl.position.copy(nucleolus.position);nuc.add(nl);S.add(nuc);
+// gugus sitosol (enzim)
+const SP=new T.Vector3(-11,1.6,6),clus=new T.Group();clus.position.copy(SP);clus.userData={id:'sitoplasma'};
+for(let i=0;i<16;i++){const m=mk(new T.IcosahedronGeometry(.28+Math.random()*.25,1),i%2?0x6bffb0:0x4ff0d0,{emissive:0x138a6a});m.position.copy(rd()).multiplyScalar(1+Math.random()*1.6);m.userData.ph=Math.random()*6;clus.add(m)}
+const cl=new T.PointLight(0x4ff0d0,1,12);clus.add(cl);S.add(clus);
+// partikel sitosol
+const PN=450,pg=new T.BufferGeometry(),pp=new Float32Array(PN*3),ps=[];
+for(let i=0;i<PN;i++){const a=Math.random()*6.28,r=Math.sqrt(Math.random());pp.set([Math.cos(a)*r*A,.3+Math.random()*5,Math.sin(a)*r*B],i*3);ps.push(Math.random()*6)}
+pg.setAttribute('position',new T.BufferAttribute(pp,3));S.add(new T.Points(pg,new T.PointsMaterial({color:0x9ffff0,size:.14,transparent:true,opacity:.6,depthWrite:false})));
+// pemain: karakter 3D (Cellcy.glb) — probe dipakai sebagai cadangan sebelum model termuat
+const P=new T.Group(),probe=new T.Group();
+const core=mk(new T.IcosahedronGeometry(.5,2),0x4ff0d0,{emissive:0x22d0b0,emissiveIntensity:1.2}),ring=mk(new T.TorusGeometry(.85,.05,8,40),0xffffff,{emissive:0xffffff});
+ring.rotation.x=Math.PI/2;probe.add(core,ring);P.add(probe);
+const charLight=new T.PointLight(0xbdfff4,.8,15);charLight.position.set(0,3.6,1.2);P.add(charLight);
+P.position.set(-4,0,10);S.add(P);
+const vel=new T.Vector3();let target=null;
+// objek interaktif
+const IT=[],LBL=$('lbls');
+function add(o){IT.push(o);o.found=false;
+ o.beam=new T.Mesh(new T.CylinderGeometry(.12,.12,14,8,1,true),new T.MeshBasicMaterial({color:0xffb347,transparent:true,opacity:.35,depthWrite:false}));o.beam.position.set(o.pos.x,7,o.pos.z);
+ o.rg=new T.Mesh(new T.TorusGeometry(o.rr,.08,8,48),new T.MeshBasicMaterial({color:0xffb347,transparent:true,opacity:.7}));o.rg.rotation.x=Math.PI/2;o.rg.position.set(o.pos.x,.06,o.pos.z);
+ S.add(o.beam,o.rg);o.el=document.createElement('div');o.el.className='lbl';o.el.textContent=o.name;LBL.appendChild(o.el);
+ o.bs=[o.beam];o.rs=[o.rg];(o.pts||[]).slice(1).forEach(p=>{const b=o.beam.clone(),r=o.rg.clone();b.position.set(p.x,7,p.z);r.position.set(p.x,.06,p.z);S.add(b,r);o.bs.push(b);o.rs.push(r)});if(o.need){o.beam.visible=o.rg.visible=false}}
+add({id:'membran',name:'Membran Sel',pos:cp,range:6,rr:3.2,ly:3.5,tag:'GERBANG SELEKTIF',
+ body:'Tersusun dari <b>lapisan ganda fosfolipid</b> dengan protein tertanam. Bersifat <b>selektif permeabel</b>: mengatur zat yang masuk dan keluar lewat difusi, osmosis, transpor aktif, dan kanal protein (yang berwarna pink di dekatmu).',
+ fact:'Kepala fosfolipid bersifat hidrofilik (suka air) dan ekornya hidrofobik, sehingga ekor saling berhadapan di bagian dalam. Model ini disebut <b>mosaik cair</b>.'});
+add({id:'sitoplasma',name:'Sitoplasma',pos:SP,range:5,rr:3,ly:4,tag:'ARENA KEHIDUPAN SEL',
+ body:'Cairan <b>sitosol</b> berisi air, ion, enzim, dan molekul organik, tempat organel tersebar. Banyak reaksi metabolisme, misalnya <b>glikolisis</b>, berlangsung di sini.',
+ fact:'Sitoplasma tidak diam: aliran sitoplasma (siklosis) membantu mendistribusikan zat ke seluruh sel.'});
+add({id:'nukleus',name:'Nukleus (Inti Sel)',pos:NC,range:9.5,rr:6.9,ly:7.5,tag:'PUSAT KENDALI',
+ body:'Menyimpan <b>materi genetik (DNA)</b> dalam bentuk kromatin dan mengendalikan aktivitas sel, termasuk pembelahan sel dan sintesis protein. Selubung intinya berpori untuk lalu lintas RNA dan protein.',
+ fact:'Pada sel eukariotik DNA terlindungi di dalam nukleus, berbeda dengan sel prokariotik yang tidak punya inti sejati. <b>Pori inti terbuka</b>: kamu bisa masuk sekarang!'});
+add({id:'nukleolus',name:'Nukleolus (Anak Inti)',pos:new T.Vector3().copy(NC).add(nucleolus.position),range:3.4,rr:1.9,ly:3.5,need:'nukleus',tag:'PABRIK RIBOSOM',
+ body:'Tempat sintesis <b>rRNA</b> dan perakitan <b>subunit ribosom</b>. Subunit diekspor lewat pori inti ke sitoplasma lalu bergabung menjadi ribosom yang siap membuat protein.',
+ fact:'Sel yang sangat aktif membuat protein biasanya memiliki nukleolus yang lebih besar dan menonjol.'});
+// ===== ISI SEL LENGKAP (dekor + teaser Zona 2 & 3) =====
+const DEC=[],ANI=[],VS=[],PK=[],dm=(c,e,o={})=>mk(new T.SphereGeometry(1,24,16),c,Object.assign({emissive:e,transparent:true,opacity:.9},o));
+function dlabel(){}
+const ribM=new T.MeshStandardMaterial({color:0xffd34d,emissive:0x6a4a00});
+// ribosom bebas
+const rib=new T.InstancedMesh(new T.SphereGeometry(.17,8,6),ribM,140),od=new T.Object3D();
+for(let i=0;i<140;i++){let x,z;do{const a=Math.random()*6.28,r=Math.sqrt(Math.random());x=Math.cos(a)*r*(A-3);z=Math.sin(a)*r*(B-3)}while(Math.hypot(x-NC.x,z-NC.z)<6.5);od.position.set(x,.3+Math.random()*2.5,z);od.updateMatrix();rib.setMatrixAt(i,od.matrix)}
+S.add(rib);dlabel('Ribosom · Zona 2',-6,2,2.2);
+// RE kasar
+const rer=new T.Group();rer.position.set(-2,0,-7);
+for(let i=0;i<6;i++){const s=dm(0x5fa8ff,0x143a77,{opacity:.85});s.scale.set(3.4-i*.1,.22,1.8);s.position.set(Math.sin(i)*.3,.5+i*.5,0);s.rotation.y=i*.12;rer.add(s);
+ for(let j=0;j<14;j++){const r=new T.Mesh(new T.SphereGeometry(.13,6,5),ribM);r.position.set((Math.random()*2-1)*2.4,.5+i*.5+.22,(Math.random()*2-1)*1.2);rer.add(r)}}
+S.add(rer);dlabel('Retikulum Endoplasma Kasar · Zona 2',-2,-7,4.4);
+// RE halus
+for(let k=0;k<3;k++){const pts=[];for(let i=0;i<7;i++)pts.push(new T.Vector3(-5-i*1.6-Math.random(),.6+Math.random()*1.4,-3+k*2.2+Math.sin(i*1.7+k)*1.4));
+ S.add(mk(new T.TubeGeometry(new T.CatmullRomCurve3(pts),60,.22,8,false),0x8fd0ff,{emissive:0x1a4a77,transparent:true,opacity:.85}))}
+dlabel('Retikulum Endoplasma Halus',-10,-1,2.8);
+// Golgi
+const gol=new T.Group();gol.position.set(-12,0,-10);
+for(let i=0;i<5;i++){const s=dm(0xff8a5c,0x7a2a10,{opacity:.9});s.scale.set(3-Math.abs(i-2)*.3,.2,1.3);s.position.y=.6+i*.55;s.rotation.z=(i-2)*.05;gol.add(s)}
+S.add(gol);dlabel('Badan Golgi · Zona 2',-12,-10,4.6);
+// vesikel (RER -> Golgi -> membran)
+const vP=[new T.Vector3(-2,1.4,-7),new T.Vector3(-12,1.4,-10),new T.Vector3(-19,1.5,-10)];
+for(let i=0;i<12;i++){const m=new T.Mesh(new T.SphereGeometry(.34,14,10),new T.MeshStandardMaterial({color:i<6?0xbfe8ff:0xfff0a0,emissive:i<6?0x2a6a8a:0x8a7010,transparent:true,opacity:.85}));m.userData={s:i<6?0:1,o:Math.random()};S.add(m);VS.push(m)}
+dlabel('Vesikel · Zona 2',-7,-8.5,3);
+// mitokondria
+function mito(x,z,ry){const g=new T.Group(),o=dm(0xff5a3c,0x5a1608,{opacity:.55});o.scale.set(2.1,.9,.9);g.add(o);
+ for(let i=0;i<6;i++){const c=mk(new T.TorusGeometry(.6,.07,6,16),0xffb08a,{emissive:0x7a3010});c.rotation.y=Math.PI/2;c.position.x=-1.3+i*.52;g.add(c)}
+ g.position.set(x,1,z);g.rotation.y=ry;g.userData.ph=Math.random()*6;S.add(g);ANI.push(g);dlabel('Mitokondria · Zona 3',x,z,3)}
+[[14,8,.4],[18,-6,1.2],[-4,13,2.4],[10,-12,.9],[-17,10,.2]].forEach(p=>mito(...p));
+// lisosom
+function liso(x,z){const g=new T.Group(),o=dm(0xb6ff4a,0x3a6a08,{opacity:.6});o.scale.setScalar(.85);g.add(o);
+ for(let i=0;i<7;i++){const s=new T.Mesh(new T.SphereGeometry(.14,6,5),new T.MeshStandardMaterial({color:0x2a3a10}));s.position.copy(rd()).multiplyScalar(.45);g.add(s)}
+ g.position.set(x,.9,z);g.userData.ph=Math.random()*6;S.add(g);ANI.push(g);dlabel('Lisosom · Zona 3',x,z,2.6)}
+[[20,2],[22,-3],[12,14],[17,-11]].forEach(p=>liso(...p));
+// peroksisom
+function pero(x,z){const g=new T.Group(),o=dm(0xd9a066,0x4a2a08,{opacity:.55});o.scale.setScalar(.7);g.add(o);
+ g.add(mk(new T.DodecahedronGeometry(.28),0x3a2a1a,{emissive:0x1a0a00}));g.position.set(x,.8,z);g.userData.ph=Math.random()*6;S.add(g);ANI.push(g);dlabel('Peroksisom · Zona 3',x,z,2.4)}
+[[-16,-3],[4,10],[-5,9],[1,-14]].forEach(p=>pero(...p));
+// sentriol + mikrotubulus
+const cen=new T.Group();cen.position.set(1,.9,6.5);
+[0,1].forEach(i=>{const c=mk(new T.CylinderGeometry(.22,.22,1.1,12),0xe6e6ff,{emissive:0x333366});if(i){c.rotation.z=Math.PI/2;c.position.z=.8}cen.add(c)});S.add(cen);dlabel('Sentriol & Sitoskeleton',1,6.5,2.6);
+const mp=[];for(let i=0;i<30;i++){const a=Math.random()*6.28,r=5+Math.random()*9;mp.push(1,.5,6.5,1+Math.cos(a)*r*1.2,.3+Math.random()*1.5,6.5+Math.sin(a)*r*.6)}
+const mg=new T.BufferGeometry();mg.setAttribute('position',new T.Float32BufferAttribute(mp,3));S.add(new T.LineSegments(mg,new T.LineBasicMaterial({color:0x6fc3d6,transparent:true,opacity:.3})));
+function decor(t){for(const g of ANI){g.position.y+=Math.sin(t*1.5+g.userData.ph)*.003;g.rotation.y+=.002}
+ VS.forEach(m=>{const u=m.userData,p=(t*.07+u.o)%1;m.position.lerpVectors(vP[u.s],vP[u.s+1],p);m.position.y+=Math.sin(t*3+u.o*9)*.25;m.position.z+=Math.sin(t*2+u.o*9)*.3});
+ cen.rotation.y=t*.3;rm.rotation.y=t*.4;
+ for(const d of DEC){const near2=Math.hypot(P.position.x-d.pos.x,P.position.z-d.pos.z)<7;if(phase==='explore'&&near2){tmp.copy(d.pos).project(C);d.el.style.display=tmp.z<1?'block':'none';d.el.style.transform=`translate(${(tmp.x*.5+.5)*innerWidth}px,${(-tmp.y*.5+.5)*innerHeight}px) translate(-50%,-50%)`}else d.el.style.display='none'}}
+// ===== SEMUA ORGANEL BISA DIPELAJARI =====
+const V=(x,z)=>new T.Vector3(x,1,z),hit=(r,y=0)=>{const h=new T.Mesh(new T.SphereGeometry(r,10,8),new T.MeshBasicMaterial({transparent:true,opacity:0,depthWrite:false}));h.position.y=y;return h};
+const np=o=>{let b=o.pos,d=1e9;for(const p of (o.pts||[o.pos])){const q=Math.hypot(P.position.x-p.x,P.position.z-p.z);if(q<d){d=q;b=p}}return b};
+ANI.forEach((g,i)=>{g.userData.id=i<5?'mitokondria':i<9?'lisosom':'peroksisom';g.add(hit(i<5?2.3:i<9?1.5:1.3));PK.push(g)});
+VS.forEach(m=>{m.userData.id='vesikel';m.add(hit(1.1));PK.push(m)});
+rer.userData.id='rer';rer.add(hit(3.6,1.5));rer.traverse(m=>{if(m.isMesh&&m.geometry.parameters&&m.geometry.parameters.radius===.13)m.userData.id='ribosom'});PK.push(rer);
+gol.userData.id='golgi';gol.add(hit(3.2,1.5));PK.push(gol);
+cen.userData.id='sentriol';cen.add(hit(1.6));PK.push(cen);
+rib.userData.id='ribosom';PK.push(rib);
+const hh=hit(3.6,1);hh.position.x=-10;hh.position.z=-1;hh.userData.id='rehalus';S.add(hh);PK.push(hh);
+// model ribosom close-up
+const rm=new T.Group();rm.position.set(-4,1.7,2);
+const rbig=mk(new T.SphereGeometry(.95,24,16),0xffd34d,{emissive:0x7a5200});rbig.scale.set(1,.8,1);
+const rsm=mk(new T.SphereGeometry(.65,20,14),0xffa826,{emissive:0x6a3a00});rsm.position.set(0,.95,0);rsm.scale.set(1.1,.7,1);
+const rmr=mk(new T.TubeGeometry(new T.CatmullRomCurve3([new T.Vector3(-2.5,.55,.2),new T.Vector3(-1,.7,-.3),new T.Vector3(0,.6,.1),new T.Vector3(1.2,.55,.4),new T.Vector3(2.6,.7,0)]),30,.07,6,false),0xff6bd6,{emissive:0x8a2a70});
+rm.add(rbig,rsm,rmr,hit(2,.4));rm.userData.id='ribosom';PK.push(rm);S.add(rm);
+add({id:'ribosom',name:'Ribosom',short:'Ribosom',pos:V(-4,2),range:3.4,rr:1.8,ly:4.2,tag:'PENERJEMAH PROTEIN',body:'Tersusun dari <b>rRNA dan protein</b>, terdiri atas subunit besar dan subunit kecil. Ribosom <b>menerjemahkan mRNA menjadi rantai polipeptida</b> (sintesis protein). Ada yang bebas di sitoplasma, ada yang menempel pada RE kasar. Lihat model besarnya: mRNA (pink) terjepit di antara dua subunit.',fact:'Ribosom tidak dibungkus membran, jadi sel prokariotik pun memilikinya. Ribosom bebas membuat protein untuk dipakai di dalam sel, sedangkan yang menempel di RE kasar membuat protein untuk membran, lisosom, atau sekresi.'});
+add({id:'rer',name:'Retikulum Endoplasma Kasar',short:'RE Kasar',pos:V(-2,-7),range:5,rr:4,ly:4.6,tag:'JALUR PROTEIN',body:'Jaringan kantung pipih bermembran yang <b>permukaannya dilapisi ribosom</b>. Protein yang dibuat ribosom masuk ke lumen RER, dilipat dan dimodifikasi, lalu dikemas ke <b>vesikel transpor</b> menuju badan Golgi.',fact:'Membran RER bersambungan dengan selubung inti, jadi RER seperti perpanjangan membran luar nukleus.'});
+add({id:'rehalus',name:'Retikulum Endoplasma Halus',short:'RE Halus',pos:V(-10,-1),range:4.5,rr:3.6,ly:3.2,tag:'PABRIK LIPID & DETOKS',body:'Berupa tabung-tabung bermembran <b>tanpa ribosom</b>. Berperan dalam <b>sintesis lipid</b> (termasuk fosfolipid dan steroid), detoksifikasi zat berbahaya, dan penyimpanan ion kalsium.',fact:'Sel hati memiliki RE halus yang sangat berkembang karena aktif menetralkan racun dan obat.'});
+add({id:'golgi',name:'Badan Golgi',short:'Golgi',pos:V(-12,-10),range:4.2,rr:3.2,ly:4.8,tag:'PUSAT PENGEMASAN',body:'Tumpukan sisterna pipih yang <b>memodifikasi, menyortir, dan mengemas</b> protein serta lipid dari RE ke dalam vesikel, untuk dikirim ke membran sel, ke lisosom, atau dikeluarkan dari sel (sekresi).',fact:'Sisi Golgi yang menerima kiriman dari RE disebut sisi cis, sedangkan sisi yang mengirim keluar disebut sisi trans.'});
+add({id:'vesikel',name:'Vesikel',short:'Vesikel',pos:V(-7,-8.5),pts:[V(-7,-8.5),V(-17,-10)],range:2.8,rr:1.7,ly:3.2,tag:'KURIR SEL',body:'Kantung kecil bermembran yang <b>mengangkut zat antar bagian sel</b>, misalnya dari RE ke Golgi, lalu dari Golgi ke membran sel. Pada eksositosis, vesikel menyatu dengan membran dan melepas isinya ke luar sel.',fact:'Alur protein: ribosom di RE kasar, vesikel, Golgi, vesikel, lalu membran sel atau lisosom. Urutan ini akan jadi puzzle seru nanti!'});
+add({id:'mitokondria',name:'Mitokondria',short:'Mitokondria',pos:V(14,8),pts:[V(14,8),V(18,-6),V(-4,13),V(10,-12),V(-17,10)],range:4,rr:2.4,ly:3.2,tag:'PEMBANGKIT ENERGI',body:'Organel berselaput ganda dengan lipatan dalam bernama <b>krista</b>. Tempat <b>respirasi seluler aerob</b> yang menghasilkan sebagian besar <b>ATP</b> (energi sel). Ada 5 mitokondria di sel ini.',fact:'Mitokondria punya DNA dan ribosom sendiri serta dapat membelah sendiri. Ini mendukung teori endosimbiosis.'});
+add({id:'lisosom',name:'Lisosom',short:'Lisosom',pos:V(20,2),pts:[V(20,2),V(22,-3),V(12,14),V(17,-11)],range:3.5,rr:1.9,ly:2.8,tag:'SISTEM DAUR ULANG',body:'Kantung bermembran berisi <b>enzim hidrolitik</b> yang mencerna makromolekul, organel rusak, dan zat asing hasil fagositosis. Dengan begitu bahan sel didaur ulang.',fact:'Sel darah putih pemakan bakteri kaya akan lisosom untuk menghancurkan mangsanya.'});
+add({id:'peroksisom',name:'Peroksisom',short:'Peroksisom',pos:V(-16,-3),pts:[V(-16,-3),V(4,10),V(-5,9),V(1,-14)],range:3.3,rr:1.7,ly:2.6,tag:'PENETRAL RACUN',body:'Organel kecil berisi enzim <b>oksidase dan katalase</b>. Menguraikan asam lemak dan <b>mengubah hidrogen peroksida (H₂O₂) yang beracun menjadi air dan oksigen</b>.',fact:'Peroksisom banyak terdapat di sel hati dan ginjal yang aktif mendetoksifikasi.'});
+add({id:'sentriol',name:'Sentriol & Sitoskeleton',short:'Sentriol',pos:V(1,6.5),range:3.5,rr:1.8,ly:2.8,tag:'RANGKA & PEMBELAHAN SEL',body:'Sepasang <b>sentriol</b> tersusun dari mikrotubulus dan membentuk <b>benang spindel</b> saat sel hewan membelah. Serat <b>sitoskeleton</b> (mikrotubulus, mikrofilamen, filamen intermediet) menjaga bentuk sel dan menjadi jalur transpor organel.',fact:'Sel tumbuhan tingkat tinggi tidak punya sentriol, tetapi tetap bisa membentuk benang spindel.'});
+IT.forEach(o=>{if(!o.short)o.short=o.name.replace(/ \(.*\)/,'')});
+const byId=id=>IT.find(o=>o.id===id);
+let QS=[['Klik struktur yang menjadi <b>pusat kendali sel</b> dan menyimpan DNA.','nukleus'],['Klik bagian yang <b>merakit subunit ribosom</b>.','nukleolus'],['Klik pembatas sel yang <b>mengatur keluar-masuk zat</b> secara selektif.','membran'],['Klik cairan tempat <b>glikolisis</b> dan banyak reaksi metabolisme berlangsung.','sitoplasma'],['Klik struktur kecil <b>tanpa membran</b> yang menerjemahkan mRNA menjadi protein.','ribosom'],['Klik kantung pipih yang <b>ditempeli ribosom</b> dan memproses protein baru.','rer'],['Klik retikulum yang <b>tanpa ribosom</b>, membuat lipid, dan menetralkan racun.','rehalus'],['Klik tumpukan sisterna yang <b>memodifikasi, menyortir, dan mengemas</b> protein.','golgi'],['Klik kantung kecil yang menjadi <b>kurir pengangkut zat</b> antar organel.','vesikel'],['Klik organel berkrista yang menghasilkan <b>ATP</b>.','mitokondria'],['Klik organel berisi <b>enzim hidrolitik</b> untuk pencernaan intrasel.','lisosom'],['Klik organel yang mengubah <b>H₂O₂ beracun menjadi air dan oksigen</b>.','peroksisom'],['Klik pasangan silinder yang membentuk <b>benang spindel</b> saat sel membelah.','sentriol']];
+let MP=null,phase='intro',found=0,qi=0,score=0,tries=0,near=null,cdone=false;
+const keys={};addEventListener('keydown',e=>{const k=e.key.toLowerCase();keys[k]=1;if((k==='e'||k==='enter')&&near&&phase==='explore')activate(near)});addEventListener('keyup',e=>keys[e.key.toLowerCase()]=0);
+function hud(){$('list').innerHTML=IT.map(o=>{return `<li class="${o.found?'ok':''}">${o.found?'✔':'○'} ${o.found?(o.short||o.name):'???'}</li>`}).join('');$('pb').style.width=found/IT.length*100+'%'}hud();
+function card(h){$('card').innerHTML=h;$('ov').style.display='flex'}function close(){$('ov').style.display='none'}
+function toast(t,bad,ms=2800){const e=$('toast');e.innerHTML=t;e.className=bad?'bad':'';e.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(()=>e.style.display='none',ms)}
+card(`<span class="tag">MISI 01</span><h2>CELLBOUND: Inside The Cell</h2><p>Kamu adalah <b>penjelajah mikroskopis</b> yang baru saja menyusut dan masuk ke dalam sel eukariotik. Temukan <b>13 organel dan struktur sel</b>, pahami fungsinya, lalu buktikan pemahamanmu.</p><p class="fact">Ikuti <b>cahaya jingga</b> untuk menemukan struktur. Dekati lalu tekan <b>E</b> (atau tombol di layar).</p><div class="row"><button class="alt" id="join">Gabung Kelas 👥</button><button class="alt" id="z2s">Zona 2: Pabrik Protein</button><button id="go">Mulai Misi 🚀</button></div>`);
+$('go').onclick=()=>{close();phase='explore'};
+const SV=c=>`<svg viewBox='0 0 320 120' width='100%' style='display:block'>${c}</svg>`,
+an=(a,v,d,x='')=>`<animate attributeName='${a}' values='${v}' dur='${d}s' repeatCount='indefinite' ${x}/>`,
+RP=(n,f)=>Array.from({length:n},(_,i)=>f(i)).join(''),
+mo=(p,d,b=0)=>`<animateMotion path='${p}' dur='${d}s' begin='${b}s' repeatCount='indefinite'/>`,
+LB=(x,y,t)=>`<text x='${x}' y='${y}' fill='#8fb7c4' font-size='10' text-anchor='middle'>${t}</text>`;
+const P1='M10 70C60 10 100 120 150 60S250 10 310 60',P2='M20 100C80 70 120 105 170 90S260 100 305 85',P3='M40 25C90 45 130 20 180 35S270 30 300 20';
+const ILL={
+membran:SV(RP(15,i=>{if(i==7)return'';const x=20+i*20;return `<circle cx='${x}' cy='28' r='7' fill='#ffb36b'/><path d='M${x-2} 35V56M${x+2} 35V56' stroke='#ffe6b0' stroke-width='2'/><circle cx='${x}' cy='92' r='7' fill='#ffb36b'/><path d='M${x-2} 85V64M${x+2} 85V64' stroke='#ffe6b0' stroke-width='2'/>`})+`<rect x='148' y='20' width='24' height='80' rx='9' fill='#ff5fa2'/><rect x='156' y='20' width='8' height='80' fill='#04141f'/>`+RP(4,i=>`<circle cx='160' cy='0' r='3.5' fill='#4ff0d0'>${an('cy','0;120',3,`begin='${i*.75}s'`)}</circle>`)+RP(5,i=>`<circle cx='${40+i*50}' cy='10' r='3' fill='#8fd0ff'>${an('cy','8;14;8',2+i*.3)}</circle>`)+LB(160,116,'kanal protein')),
+sitoplasma:SV(RP(18,i=>{const x=15+(i*53)%290,y=15+(i*37)%90;return `<circle cx='${x}' cy='${y}' r='${3+i%3*2}' fill='${i%2?'#6bffb0':'#4ff0d0'}' opacity='.85'>${an('cy',`${y};${y-9};${y}`,2+i%4)}${an('cx',`${x};${x+6};${x}`,3+i%3)}</circle>`})+`<ellipse cx='90' cy='60' rx='26' ry='12' fill='#ff5a3c' opacity='.5'>${an('cx','90;130;90',9)}</ellipse><circle cx='240' cy='50' r='14' fill='#b6ff4a' opacity='.45'>${an('cy','50;70;50',7)}</circle>`+LB(160,114,'sitosol: enzim, ion, dan organel melayang')),
+nukleus:SV(`<circle cx='160' cy='60' r='52' fill='#8a6bff' opacity='.35' stroke='#b7a3ff' stroke-width='3'/><circle cx='160' cy='60' r='52' fill='none' stroke='#ffe27a' stroke-width='5' stroke-dasharray='4 14'><animateTransform attributeName='transform' type='rotate' values='0 160 60;360 160 60' dur='30s' repeatCount='indefinite'/></circle><path d='M120 70Q135 30 150 55T185 45T200 75' fill='none' stroke='#ff7ad9' stroke-width='3' stroke-dasharray='6 5'>${an('stroke-dashoffset','0;-22',2)}</path><circle cx='170' cy='62' r='13' fill='#ff9d3c'>${an('r','12;15;12',2.5)}</circle>`+RP(3,i=>`<circle r='4' fill='#ff7ad9'>${mo('M165 60L215 24L285 24',4,i*1.3)}${an('opacity','1;1;0',4,`begin='${i*1.3}s'`)}</circle>`)+LB(160,116,'DNA/kromatin, nukleolus, dan pori inti')),
+nukleolus:SV(`<circle cx='95' cy='60' r='78' fill='#8a6bff' opacity='.3' stroke='#b7a3ff' stroke-width='3'/><circle cx='95' cy='60' r='24' fill='#ff9d3c'>${an('r','23;27;23',2.2)}</circle><circle r='10' fill='#ffd34d'>${mo('M115 52L190 36L268 58',5)}${an('opacity','1;1;0',5,`keyTimes='0;.9;1'`)}</circle><circle r='6.5' fill='#ffa826'>${mo('M115 68L190 86L268 70',5)}${an('opacity','1;1;0',5,`keyTimes='0;.9;1'`)}</circle>`+LB(268,106,'subunit ribosom bergabung')),
+ribosom:SV(`<path d='M10 82Q60 62 110 82T210 82T310 82' fill='none' stroke='#ff6bd6' stroke-width='4'/><path d='M10 82Q60 62 110 82T210 82T310 82' fill='none' stroke='#fff' stroke-width='2' stroke-dasharray='3 12' opacity='.6'>${an('stroke-dashoffset','0;-30',1.5)}</path><g><animateTransform attributeName='transform' type='translate' values='0 0;0 -4;0 0' dur='2s' repeatCount='indefinite'/><ellipse cx='160' cy='68' rx='30' ry='18' fill='#ffd34d'/><ellipse cx='160' cy='46' rx='22' ry='12' fill='#ffa826'/></g>`+RP(8,i=>`<circle cx='${180+i*14}' cy='${34-i*2.5}' r='5' fill='#6bffb0' opacity='0'>${an('opacity','0;0;1;1',8,`keyTimes='0;${i/9};${(i+1)/9};1'`)}</circle>`)+LB(40,106,'mRNA')+LB(268,16,'rantai polipeptida')),
+rer:SV(RP(4,i=>{const y=32+i*20;return `<ellipse cx='150' cy='${y}' rx='95' ry='8' fill='#5fa8ff'/>`+RP(9,j=>`<circle cx='${70+j*20+(i%2)*6}' cy='${y-8}' r='3' fill='#ffd34d'>${an('r','3;4;3',1.5+j*.1)}</circle>`)})+`<circle r='9' fill='#bfe8ff' opacity='.9'>${mo('M245 52L290 30L310 8',3)}${an('opacity','0;1;1;0',3)}</circle>`+LB(60,116,'ribosom menempel')+LB(285,50,'vesikel')),
+rehalus:SV([P1,P2,P3].map(p=>`<path d='${p}' fill='none' stroke='#8fd0ff' stroke-width='10' stroke-linecap='round' opacity='.85'/>`).join('')+[P1,P2,P3].map((p,i)=>`<circle r='4' fill='#ffd34d'>${mo(p,5+i)}</circle><circle r='4' fill='#ff9ad0'>${mo(p,5+i,2+i)}</circle>`).join('')+LB(160,116,'tabung tanpa ribosom: lipid mengalir')),
+golgi:SV(RP(5,i=>{const y=95-i*14;return `<path d='M60 ${y}Q160 ${y-16} 260 ${y}' fill='none' stroke='${['#ff8a5c','#ff9a6c','#ffaa7c','#ffba8c','#ffca9c'][i]}' stroke-width='9' stroke-linecap='round'/>`})+`<circle r='7' fill='#bfe8ff'>${mo('M12 70L50 88',3)}${an('opacity','0;1;1;0',3)}</circle><circle r='7' fill='#fff0a0'>${mo('M262 38L300 14',3,1.5)}${an('opacity','0;1;1;0',3,`begin='1.5s'`)}</circle>`+LB(30,112,'sisi cis')+LB(285,112,'sisi trans')),
+vesikel:SV(`<ellipse cx='30' cy='60' rx='30' ry='40' fill='#5fa8ff' opacity='.7'/>`+RP(8,i=>`<circle cx='292' cy='${15+i*13}' r='6' fill='#ffb36b'/>`)+`<g><animateTransform attributeName='transform' type='translate' values='0 0;225 0;225 0' keyTimes='0;.75;1' dur='5s' repeatCount='indefinite'/>${an('opacity','1;1;0;0',5,`keyTimes='0;.74;.78;1'`)}<circle cx='62' cy='60' r='16' fill='#bfe8ff' opacity='.6' stroke='#fff' stroke-width='2'/>`+RP(3,i=>`<circle cx='${56+i*6}' cy='${56+i%2*8}' r='3' fill='#fff0a0'/>`)+`</g>`+RP(3,i=>`<circle cx='285' cy='${50+i*10}' r='3' fill='#fff0a0' opacity='0'>${an('opacity','0;0;1;0',5,`keyTimes='0;.75;.85;1'`)}${an('cx','285;285;312;312',5,`keyTimes='0;.75;.95;1'`)}</circle>`)+LB(160,112,'vesikel membawa isi lalu melepasnya ke luar sel')),
+mitokondria:SV(`<ellipse cx='160' cy='60' rx='110' ry='46' fill='#ff5a3c' opacity='.55' stroke='#ffb08a' stroke-width='3'/><path d='M70 60L82 32L94 88L106 32L118 88L130 32L142 88L154 32L166 88L178 32L190 88L202 32L214 88L226 32L238 60' fill='none' stroke='#ffd0b0' stroke-width='4' stroke-linejoin='round' stroke-dasharray='10 6'>${an('stroke-dashoffset','0;-32',2)}</path>`+RP(4,i=>`<text font-size='13' font-weight='800' fill='#ffe27a'>ATP${mo('M150 60L215 20L300 14',3.2,i*.8)}${an('opacity','0;1;1;0',3.2,`begin='${i*.8}s'`)}</text>`)+LB(160,116,'krista menghasilkan ATP')),
+lisosom:SV(`<circle cx='200' cy='60' r='40' fill='#b6ff4a' opacity='.45' stroke='#d8ff8a' stroke-width='3'/>`+RP(9,i=>{const y=45+(i*13)%32;return `<circle cx='${185+(i*17)%32}' cy='${y}' r='3' fill='#3a5a10'>${an('cy',`${y};${y+3};${y}`,.8+i*.1)}</circle>`})+`<ellipse rx='14' ry='8' fill='#a8744a'>${mo('M30 60L190 60',4)}${an('rx','14;14;0',4,`keyTimes='0;.7;1'`)}${an('opacity','1;1;0',4,`keyTimes='0;.8;1'`)}</ellipse>`+LB(200,112,'enzim hidrolitik mencerna sisa sel')),
+peroksisom:SV(`<circle cx='170' cy='60' r='38' fill='#d9a066' opacity='.5' stroke='#f0c690' stroke-width='3'/><rect x='156' y='46' width='28' height='28' fill='#3a2a1a'><animateTransform attributeName='transform' type='rotate' values='0 170 60;360 170 60' dur='12s' repeatCount='indefinite'/></rect><text font-size='13' font-weight='800' fill='#ff9aa0' text-anchor='middle'>H₂O₂${mo('M20 60L120 60',4)}${an('opacity','1;1;0',4,`keyTimes='0;.85;1'`)}</text>`+RP(2,i=>`<text font-size='13' font-weight='800' fill='#8fe0ff' text-anchor='middle'>${i?'O₂':'H₂O'}${mo(`M180 40L${i?250:290} ${i?15:70}`,4,2)}${an('opacity','0;1;1;0',4,`begin='2s'`)}</text>`)+LB(160,112,'H₂O₂ beracun diubah menjadi air dan oksigen')),
+sentriol:SV(RP(14,i=>{const a=i/14*6.283,x=160+Math.cos(a)*140,y=60+Math.sin(a)*70;return `<line x1='160' y1='60' x2='${x}' y2='${y}' stroke='#6fc3d6' stroke-width='2' stroke-dasharray='8 6' opacity='.7'>${an('stroke-dashoffset','0;-28',2)}</line>`})+`<g><animateTransform attributeName='transform' type='rotate' values='0 160 60;360 160 60' dur='16s' repeatCount='indefinite'/><rect x='146' y='52' width='40' height='16' rx='8' fill='#e6e6ff'/><rect x='170' y='62' width='16' height='38' rx='8' fill='#cfcfff'/></g>`+LB(160,116,'sentriol dan serat mikrotubulus'))
+};
+function activate(o){const first=!o.found;if(first){o.found=true;found++;o.bs.forEach(b=>b.visible=false);o.rg.material.color.set(0x4ff0d0);burst(o.pos,o.rr);hud();if(MP)mpFound(o.id);
+  if(o.id==='nukleus'){const n=byId('nukleolus');n.beam.visible=n.rg.visible=true;toast('Pori inti terbuka! Cari struktur oranye di dalam nukleus.',false,3500)}}
+ phase='panel';card(`<div class="ill">${ILL[o.id]||''}</div><span class="tag">${o.tag}</span><h2>${o.name}</h2><p>${o.body}</p><p class="fact">💡 ${o.fact}</p><div class="row"><button id="ok">${found===IT.length&&!cdone&&!MP?'Lanjut ke Tantangan':'Lanjut menjelajah'}</button></div><p style="font-size:12px;color:var(--mut)">Ditemukan: ${found}/${IT.length}</p>`);
+ $('ok').onclick=()=>{close();if(found===IT.length&&!cdone&&!MP)intro();else phase='explore'}}
+function intro(){phase='panel';card(`<span class="tag">TANTANGAN</span><h2>Uji Identifikasi 🔬</h2><p>Semua struktur sudah kamu temukan. Kamera akan menjauh dan label disembunyikan. Jawab 10 pertanyaan acak dengan <b>mengklik/mengetuk struktur yang tepat</b> langsung di dunia 3D.</p><p class="fact">Benar di percobaan pertama: 10 poin. Percobaan berikutnya: 5 poin.</p><div class="row"><button id="ok">Mulai Tantangan</button></div>`);$('ok').onclick=()=>{close();phase='challenge';QS=QS.slice().sort(()=>Math.random()-.5).slice(0,10);qi=0;score=0;tries=0;ask()}}
+function ask(){const q=$('q');q.style.display='block';q.innerHTML=`<small>PERTANYAAN ${qi+1}/${QS.length} · SKOR ${score}</small>${QS[qi][0]}`}
+function answer(id){if(phase!=='challenge')return;if(MP){mpAnswer(id);return}const ok=id===QS[qi][1],o=byId(id),t=byId(QS[qi][1]);
+ if(ok){score+=tries?5:10;burst(t.pos,t.rr);toast(`✅ Tepat! <b>${t.name}</b>: ${t.tag.toLowerCase()}.`,false,2200);tries=0;qi++;phase='wait';setTimeout(()=>{if(qi<QS.length){phase='challenge';ask()}else finish()},2300)}
+ else{tries++;toast(`❌ Belum tepat. Yang kamu klik adalah <b>${o.name}</b> (${o.tag.toLowerCase()}). Coba lagi!`,true,3200)}}
+function finish(){phase='done';$('q').style.display='none';const st=score>=90?'⭐⭐⭐':score>=60?'⭐⭐':'⭐';card(`<span class="tag">ZONA 1 SELESAI</span><h2>${st} Skor ${score}/100</h2><p>Kamu sudah mengenali <b>seluruh organel utama sel</b>. Sel mulai terasa seperti rumah sendiri!</p><p class="fact">Berikutnya: <b>Zona 2 – The Protein Factory</b>, yaitu puzzle jalur protein dari ribosom sampai vesikel, lalu manajemen sel.</p><div class="row"><button class="alt" id="re">Main lagi</button><button id="z2go">Zona 2: Pabrik Protein</button></div>`);$('re').onclick=()=>location.reload();$('z2go').onclick=()=>{close();startZone2()}}
+// FX
+const fx=[];function burst(p,r){const m=new T.Mesh(new T.TorusGeometry(r,.12,8,56),new T.MeshBasicMaterial({color:0x4ff0d0,transparent:true,opacity:1}));m.rotation.x=Math.PI/2;m.position.set(p.x,.3,p.z);S.add(m);fx.push({m,l:0})}
+// input
+const rc=new T.Raycaster(),mv=new T.Vector2(),gp=new T.Plane(new T.Vector3(0,1,0),-1.3);
+function ray(e){mv.set(e.clientX/innerWidth*2-1,-(e.clientY/innerHeight)*2+1);rc.setFromCamera(mv,C)}
+function pick(){const hits=rc.intersectObjects([ground,heads,tails,wall,chan,nuc,clus,...PK],true);let first=null,gr=null;
+ for(const h of hits){let o=h.object,id=null;while(o&&!id){id=o.userData.id;o=o.parent}if(!id)continue;if(id==='nukleolus')return id;if(h.object.userData.ground)gr=gr||id;else if(!first)first=id}return first||gr}
+R.domElement.addEventListener('pointerdown',e=>{ray(e);if(phase==='challenge'){const id=pick();if(id)answer(id)}else if(phase==='explore'){const p=new T.Vector3();if(rc.ray.intersectPlane(gp,p))target=p}});
+$('act').onclick=()=>{if(near&&phase==='explore')activate(near)};
+addEventListener('resize',()=>{R.setSize(innerWidth,innerHeight);C.aspect=innerWidth/innerHeight;C.updateProjectionMatrix()});
+// loop
+const clock=new T.Clock(),lookAt=new T.Vector3(),cp2=new T.Vector3(),tmp=new T.Vector3();C.position.set(-4,18,25);
+function loop(){requestAnimationFrame(loop);const dt=Math.min(clock.getDelta(),.05),t=clock.elapsedTime;
+ let dx=0,dz=0;
+ if(phase==='explore'){dx=(keys.d||keys.arrowright?1:0)-(keys.a||keys.arrowleft?1:0);dz=(keys.s||keys.arrowdown?1:0)-(keys.w||keys.arrowup?1:0);
+  if(window.JOY&&(JOY.x||JOY.y)){dx=JOY.x;dz=JOY.y}if(dx||dz){target=null;const l=Math.hypot(dx,dz);if(l>1){dx/=l;dz/=l}}else if(target){dx=target.x-P.position.x;dz=target.z-P.position.z;const q=Math.hypot(dx,dz);if(q<.4){target=null;dx=dz=0}else{dx/=q;dz/=q}}}
+ const k=Math.min(1,dt*6);vel.x+=(dx*9-vel.x)*k;vel.z+=(dz*9-vel.z)*k;
+ P.position.x+=vel.x*dt;P.position.z+=vel.z*dt;P.position.y=0;
+ const e=(P.position.x/(A-2))**2+(P.position.z/(B-2))**2;if(e>1){const s=1/Math.sqrt(e);P.position.x*=s;P.position.z*=s}
+ if(!byId('nukleus').found){const ox=P.position.x-NC.x,oz=P.position.z-NC.z,dd=Math.hypot(ox,oz);if(dd<6.8){P.position.x=NC.x+ox/dd*6.8;P.position.z=NC.z+oz/dd*6.8}}
+ if(window.charTick)charTick(dt,t,Math.hypot(vel.x,vel.z));
+ // prompt
+ near=null;if(phase==='explore'){let best=1e9;for(const o of IT){if(o.need&&!byId(o.need).found)continue;const q1=np(o),dd=Math.hypot(P.position.x-q1.x,P.position.z-q1.z);if(dd<=o.range&&dd<best){best=dd;near=o}}}
+ const b=$('act');b.style.display=near?'block':'none';if(near)b.textContent=(near.found?'E · Baca lagi ':'E · Pelajari ')+near.name;
+ // animasi dunia
+ decor(t);nuc.rotation.y=t*.05;chro.rotation.x=t*.2;chro.rotation.y=t*.15;nucleolus.rotation.y=t*.4;
+ const op=byId('nukleus').found?.16:.4;shell.material.opacity+=(op-shell.material.opacity)*.05;
+ clus.children.forEach(m=>{if(m.isMesh){m.position.y+=Math.sin(t*2+m.userData.ph)*.004;m.rotation.x=t+m.userData.ph}});clus.rotation.y=t*.25;
+ cr.material.emissiveIntensity=.7+Math.sin(t*3)*.4;
+ for(const o of IT){if(o.beam.visible){o.beam.material.opacity=.25+Math.sin(t*3)*.12;o.rs.forEach(r=>r.scale.setScalar(1+Math.sin(t*3)*.06))}}
+ const pa2=pg.attributes.position;for(let i=0;i<PN;i++){pa2.array[i*3+1]=.3+((pa2.array[i*3+1]-.3+dt*(.2+ps[i]*.08))%5);pa2.array[i*3]+=Math.sin(t+ps[i])*dt*.3}pa2.needsUpdate=true;
+ for(let i=fx.length-1;i>=0;i--){const f=fx[i];f.l+=dt;f.m.scale.setScalar(1+f.l*3);f.m.material.opacity=Math.max(0,1-f.l*1.2);if(f.l>.9){S.remove(f.m);fx.splice(i,1)}}
+ // kamera
+ const ch=phase==='challenge'||phase==='wait'||phase==='done';
+ if(ch){const tv=Math.tan(25*Math.PI/180),dist=Math.max(30/(tv*C.aspect),24/tv)*.62+10;tmp.set(0,.86,.5).multiplyScalar(dist);cp2.copy(tmp);lookAt.lerp(tmp.set(0,0,0),1-Math.exp(-dt*3))}
+ else{cp2.set(P.position.x,P.position.y+13.5,P.position.z+11.5);lookAt.lerp(tmp.set(P.position.x,2.1,P.position.z-1),1-Math.exp(-dt*5))}
+ C.position.lerp(cp2,1-Math.exp(-dt*2.5));C.lookAt(lookAt);
+ S.fog.density+=((ch?.0025:.014)-S.fog.density)*.05;
+ for(const o of IT){const q0=np(o);if(o.found&&!ch&&phase!=='intro'&&Math.hypot(P.position.x-q0.x,P.position.z-q0.z)<15){tmp.set(q0.x,o.ly,q0.z).project(C);o.el.style.display=tmp.z<1?'block':'none';o.el.style.transform=`translate(${(tmp.x*.5+.5)*innerWidth}px,${(-tmp.y*.5+.5)*innerHeight}px) translate(-50%,-50%)`}else o.el.style.display='none'}
+ TU.value=t;typeof fx2==='function'&&fx2(t,dt);typeof mpTick==='function'&&mpTick(dt,t);(typeof z2render==='function'&&z2render(dt,t))||(comp?comp.render():R.render(S,C))}
+// ===== UPGRADE VISUAL v2: tekstur prosedural, shader, bloom, animasi =====
+const TU={value:0},LQ=/[?&]lq=1/.test(location.search);
+function mkNoise(sz,oct){const cv=document.createElement('canvas');cv.width=cv.height=sz;const g=cv.getContext('2d'),im=g.createImageData(sz,sz),L=[];
+ for(let o=0;o<oct;o++){const n=4<<o,a=new Float32Array(n*n);for(let i=0;i<a.length;i++)a[i]=Math.random();L.push([n,a])}
+ const sm=t=>t*t*(3-2*t);
+ for(let y=0;y<sz;y++)for(let x=0;x<sz;x++){let v=0,am=1,tot=0;for(const[n,a]of L){const fx=x/sz*n,fy=y/sz*n,x0=Math.floor(fx),y0=Math.floor(fy),tx=sm(fx-x0),ty=sm(fy-y0),q=(xx,yy)=>a[(yy%n)*n+(xx%n)];
+  v+=am*((q(x0,y0)*(1-tx)+q(x0+1,y0)*tx)*(1-ty)+(q(x0,y0+1)*(1-tx)+q(x0+1,y0+1)*tx)*ty);tot+=am;am*=.5}
+  const k=(y*sz+x)*4,c=v/tot*255;im.data[k]=im.data[k+1]=im.data[k+2]=c;im.data[k+3]=255}
+ g.putImageData(im,0,0);const t=new T.CanvasTexture(cv);t.wrapS=t.wrapT=T.RepeatWrapping;t.anisotropy=4;return t}
+const nz=mkNoise(256,5),nz2=mkNoise(256,4);nz.repeat.set(3,3);
+// environment (pantulan basah/berkilau)
+{const pm=new T.PMREMGenerator(R),es=new T.Scene();es.add(new T.Mesh(new T.SphereGeometry(50,32,16),new T.ShaderMaterial({side:T.BackSide,vertexShader:'varying vec3 vP;void main(){vP=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',fragmentShader:'varying vec3 vP;void main(){vec3 d=normalize(vP);vec3 c=mix(vec3(.02,.12,.18),vec3(.35,.9,.95),smoothstep(-.2,1.,d.y));c+=vec3(1.,.85,.65)*pow(max(dot(d,normalize(vec3(.4,.8,.3))),0.),30.)*2.5;c+=vec3(.5,.7,1.)*pow(max(dot(d,normalize(vec3(-.6,.5,-.5))),0.),20.);gl_FragColor=vec4(c*.4,1.);}'})));
+ S.environment=null;pm.dispose()}
+// material fisik: clearcoat, bump, fresnel rim, wobble organik, kaustik di lantai
+S.traverse(m=>{if(!m.isMesh||!m.material||!m.material.isMeshStandardMaterial||m.material.isMeshPhysicalMaterial)return;
+ const o=m.material,isG=m===ground,sph=!m.isInstancedMesh&&/^(Sphere|Icosahedron)Geometry$/.test(m.geometry.type),r=(m.geometry.parameters&&m.geometry.parameters.radius)||1,amp=sph?(r<2?r*.045:r*.02):0;
+ const n=new T.MeshPhysicalMaterial({color:o.color,emissive:o.emissive,emissiveIntensity:o.emissiveIntensity,roughness:Math.min(1,o.roughness*1.5),metalness:o.metalness,transparent:o.transparent,opacity:o.opacity,side:o.side,depthWrite:o.depthWrite,wireframe:o.wireframe,clearcoat:isG?0:(o.transparent?.7:.4),clearcoatRoughness:.3,envMapIntensity:isG?.1:.45,bumpMap:isG?nz:nz2,bumpScale:isG?1.2:2.2,roughnessMap:nz2});
+ n.customProgramCacheKey=()=>'v2'+amp+isG+o.transparent;
+ n.onBeforeCompile=s=>{s.uniforms.uT=TU;
+  s.vertexShader='uniform float uT;\n'+s.vertexShader.replace('#include <begin_vertex>','vec3 transformed=position;'+(amp?`transformed+=normal*${amp.toFixed(3)}*sin(position.x*2.7+uT*1.3)*sin(position.y*2.3+uT*1.7+position.z*1.9);`:''));
+  s.fragmentShader='uniform float uT;\n'+s.fragmentShader.replace('gl_FragColor = vec4( outgoingLight, diffuseColor.a );',`float fr=pow(1.0-abs(dot(normalize(vNormal),normalize(vViewPosition))),2.2);outgoingLight+=diffuseColor.rgb*fr*${isG?'0.0':'0.45'};${isG?'vec2 q=vUv*14.0;float cs=sin(q.x*1.7+uT)+sin(q.y*1.9-uT*1.2)+sin((q.x+q.y)*1.3+uT*.8);cs=pow(max(cs*.33+.5,0.),4.0);outgoingLight+=vec3(.12,.5,.55)*cs*.18;':''}gl_FragColor=vec4(outgoingLight,clamp(diffuseColor.a+fr*${o.transparent?'.3':'0.'},0.,1.));`)};
+ m.material=n});
+ground.material.color.set(0x14566e);
+// langit-langit sitoplasma (shader)
+{const dome=new T.Mesh(new T.SphereGeometry(300,32,16),new T.ShaderMaterial({side:T.BackSide,depthWrite:false,fog:false,uniforms:{uT:TU},vertexShader:'varying vec3 vP;void main(){vP=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
+ fragmentShader:'uniform float uT;varying vec3 vP;float h(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}float n(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(h(i),h(i+vec2(1,0)),f.x),mix(h(i+vec2(0,1)),h(i+vec2(1,1)),f.x),f.y);}void main(){vec3 d=normalize(vP);vec2 p=d.xz/(abs(d.y)+.6)*2.5;float v=n(p+uT*.04)*.6+n(p*2.1-uT*.03)*.3+n(p*4.3)*.1;vec3 c=mix(vec3(.01,.06,.1),vec3(.04,.22,.3),v);c+=vec3(.0,.15,.18)*smoothstep(.55,.9,v);gl_FragColor=vec4(c,1.);}'}));dome.renderOrder=-10;S.add(dome)}
+// bokeh melayang + berkas cahaya
+const bt=(()=>{const c=document.createElement('canvas');c.width=c.height=64;const g=c.getContext('2d'),r=g.createRadialGradient(32,32,0,32,32,32);r.addColorStop(0,'rgba(255,255,255,1)');r.addColorStop(.5,'rgba(255,255,255,.35)');r.addColorStop(1,'rgba(255,255,255,0)');g.fillStyle=r;g.fillRect(0,0,64,64);return new T.CanvasTexture(c)})();
+const BK=Array.from({length:36},(_,i)=>{const s=new T.Sprite(new T.SpriteMaterial({map:bt,color:i%3?0x6ffff0:0xffd9a0,transparent:true,opacity:.03+Math.random()*.04,blending:T.AdditiveBlending,depthWrite:false}));s.position.set((Math.random()*2-1)*A*1.1,2+Math.random()*7,(Math.random()*2-1)*B*1.1);s.scale.setScalar(1.5+Math.random()*3);s.userData.ph=Math.random()*6;S.add(s);return s});
+const SH=Array.from({length:6},(_,i)=>{const m=new T.Mesh(new T.CylinderGeometry(.3,3.5,30,16,1,true),new T.MeshBasicMaterial({color:0x7ff0ff,transparent:true,opacity:.02,side:T.DoubleSide,depthWrite:false,blending:T.AdditiveBlending}));m.position.set((i-2.5)*9,15,Math.sin(i*2)*10);m.rotation.z=.15;m.userData.ph=i;S.add(m);return m});
+// jejak probe + percikan penemuan
+const TN=70,tg=new T.BufferGeometry(),tp=new Float32Array(TN*3),tc=new Float32Array(TN*3);tg.setAttribute('position',new T.BufferAttribute(tp,3));tg.setAttribute('color',new T.BufferAttribute(tc,3));
+const trail=new T.Points(tg,new T.PointsMaterial({size:.55,vertexColors:true,transparent:true,blending:T.AdditiveBlending,depthWrite:false}));trail.frustumCulled=false;S.add(trail);let tt=0,shake=0;
+const SPK=[],_burst=burst;
+burst=(p,r)=>{_burst(p,r);const n=70,g=new T.BufferGeometry(),pos=new Float32Array(n*3),vl=[];for(let i=0;i<n;i++){pos.set([p.x,1.5,p.z],i*3);const q=rd();vl.push(q.x*7,Math.abs(q.y)*6+2,q.z*7)}
+ g.setAttribute('position',new T.BufferAttribute(pos,3));const m=new T.Points(g,new T.PointsMaterial({color:0x7fffe6,size:.4,transparent:true,blending:T.AdditiveBlending,depthWrite:false}));S.add(m);SPK.push({m,vl,l:0});shake=.5};
+const mp1=new T.Vector3(),mn1=new T.Vector3();
+function memb(t){for(let i=0;i<N;i++){const a=i/N*6.2832,w=Math.sin(a*9+t*2.2)*.18;mp1.set(A*Math.cos(a),1.1+w,B*Math.sin(a));mn1.set(Math.cos(a)/A,0,Math.sin(a)/B).normalize();
+ [1,-1].forEach((s,k)=>{d.quaternion.identity();d.position.copy(mp1).addScaledVector(mn1,s);d.updateMatrix();heads.setMatrixAt(i*2+k,d.matrix);
+  d.position.copy(mp1).addScaledVector(mn1,s*.45);d.quaternion.setFromUnitVectors(Y,mn1);d.updateMatrix();tails.setMatrixAt(i*2+k,d.matrix)})}
+ heads.instanceMatrix.needsUpdate=tails.instanceMatrix.needsUpdate=true}
+function fx2(t,dt){
+ memb(t);
+ for(const s of BK){s.position.x+=Math.sin(t*.2+s.userData.ph)*dt*.6;s.position.y+=Math.cos(t*.3+s.userData.ph)*dt*.3}
+ for(const m of SH){m.rotation.z=.15+Math.sin(t*.25+m.userData.ph)*.06;m.material.opacity=.018+Math.sin(t*.6+m.userData.ph*2)*.007}
+ ANI.slice(0,5).forEach(g=>{g.children[0].material.emissiveIntensity=.7+Math.sin(t*3+g.userData.ph)*.5;g.rotation.x=Math.sin(t*.4+g.userData.ph)*.12});
+ chro.material.emissiveIntensity=.8+Math.sin(t*2)*.4;
+ tt+=dt;if(tt>.025){tt=0;tp.copyWithin(3,0,(TN-1)*3);tp.set([P.position.x,P.position.y+.9,P.position.z],0)}
+ const sp=Math.min(1,vel.length()/6);for(let i=0;i<TN;i++){const f=Math.pow(1-i/TN,2)*(.1+.4*sp);tc[i*3]=.3*f;tc[i*3+1]=1*f;tc[i*3+2]=.85*f}tg.attributes.position.needsUpdate=tg.attributes.color.needsUpdate=true;
+ for(let i=SPK.length-1;i>=0;i--){const s=SPK[i];s.l+=dt;const a=s.m.geometry.attributes.position.array;for(let j=0;j<a.length/3;j++){a[j*3]+=s.vl[j*3]*dt;a[j*3+1]+=s.vl[j*3+1]*dt;a[j*3+2]+=s.vl[j*3+2]*dt;s.vl[j*3+1]-=9*dt}s.m.geometry.attributes.position.needsUpdate=true;s.m.material.opacity=Math.max(0,1-s.l/1.4);if(s.l>1.4){S.remove(s.m);s.m.geometry.dispose();SPK.splice(i,1)}}
+ const f=phase==='challenge'?50:50+Math.min(vel.length(),9)*.6;if(Math.abs(f-C.fov)>.01){C.fov+=(f-C.fov)*.08;C.updateProjectionMatrix()}
+ if(shake>0){C.position.x+=(Math.random()-.5)*shake;C.position.y+=(Math.random()-.5)*shake;shake=Math.max(0,shake-dt*2)}}
+// bloom
+const comp=(!LQ&&T.EffectComposer&&T.UnrealBloomPass)?(()=>{const c=new T.EffectComposer(R);c.addPass(new T.RenderPass(S,C));c.addPass(new T.UnrealBloomPass(new T.Vector2(innerWidth,innerHeight),.28,.45,.9));c.addPass(new T.ShaderPass({uniforms:{tDiffuse:{value:null},ex:{value:+(new URLSearchParams(location.search).get('exp')||.95)}},vertexShader:'varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',fragmentShader:'uniform sampler2D tDiffuse;uniform float ex;varying vec2 vUv;vec3 aces(vec3 x){return clamp((x*(2.51*x+.03))/(x*(2.43*x+.59)+.14),0.,1.);}void main(){vec4 c=texture2D(tDiffuse,vUv);gl_FragColor=vec4(aces(c.rgb*ex),1.);}'}));return c})():null;
+addEventListener('resize',()=>{comp&&comp.setSize(innerWidth,innerHeight)});
+
+loop();
+</script><script src="char.js"></script><script src="mp.js"></script><script src="zona2.js"></script><script src="joystick.js"></script><script src="route.js"></script></body></html>
