@@ -26,8 +26,9 @@ function joinCard(msg){const qs=new URLSearchParams(location.search);
  $('bk').onclick=()=>location.reload();
  $('jg').onclick=()=>{const n=$('nm').value.trim(),c=$('cd').value.trim();if(!n||!c){joinCard('Isi nama dan kode kelas.');return}myName=n;connect(n,c)}}
 function connect(name,code){
- if(!/^https?:$/.test(location.protocol)){joinCard('Mode kelas butuh server. Jalankan: npm start, lalu buka alamat yang tampil.');return}
- try{WS=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host)}catch(e){joinCard('Tidak bisa terhubung ke server.');return}
+ if(!/^https?:$/.test(location.protocol)){joinCard('Mode kelas butuh server. Jalankan: npm start atau npx wrangler dev, lalu buka alamat yang tampil.');return}
+ const wsUrl=window.CB_WS_URL||new URLSearchParams(location.search).get('ws')||((location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws');
+ try{WS=new WebSocket(wsUrl)}catch(e){joinCard('Tidak bisa terhubung ke server.');return}
  WS.onopen=()=>send({t:'join',name,code});
  WS.onmessage=e=>{let d;try{d=JSON.parse(e.data)}catch{return}onMsg(d)};
  WS.onerror=()=>{if(!MP)joinCard('Tidak bisa terhubung ke server.')};

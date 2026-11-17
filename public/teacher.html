@@ -13,7 +13,9 @@ table{width:100%;border-collapse:collapse;font-size:14px}td,th{padding:6px 8px;b
 const NM={membran:'Membran sel',sitoplasma:'Sitoplasma',nukleus:'Nukleus',nukleolus:'Nukleolus',ribosom:'Ribosom',rer:'RE kasar',rehalus:'RE halus',golgi:'Badan Golgi',vesikel:'Vesikel',mitokondria:'Mitokondria',lisosom:'Lisosom',peroksisom:'Peroksisom',sentriol:'Sentriol'};
 const $=i=>document.getElementById(i),esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])),strip=s=>String(s).replace(/<[^>]+>/g,'');
 let ws,code=sessionStorage.cbCode||'',stats=[];
-function conn(){ws=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host);
+function conn(){
+ const wsUrl=window.CB_WS_URL||new URLSearchParams(location.search).get('ws')||((location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws');
+ ws=new WebSocket(wsUrl);
  ws.onopen=()=>{ws.send(JSON.stringify({t:'host',code}));$('st').textContent='Terhubung.'};
  ws.onclose=()=>{$('st').textContent='Terputus. Mencoba lagi...';setTimeout(conn,2000)};
  ws.onmessage=e=>{const d=JSON.parse(e.data);

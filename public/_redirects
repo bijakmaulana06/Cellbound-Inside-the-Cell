@@ -1,0 +1,4 @@
+# Rute untuk hosting statis (Cloudflare Pages/Assets / Netlify / Vercel)
+/          /home.html     200
+/play      /index.html    200
+/guru      /teacher.html  200

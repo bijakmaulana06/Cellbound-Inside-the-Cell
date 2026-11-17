@@ -1,0 +1,27 @@
+# Deploy statis CELLBOUND ke Netlify (tanpa server Node).
+# Game Zona 1 & Zona 2 jalan penuh. Mode Kelas (WebSocket) butuh hosting Node,
+# lihat README bagian "Deploy".
+
+[build]
+  # tidak ada proses build: berkas statis sudah ada di public/
+  command = "echo 'static: tidak ada build'"
+  publish = "public"
+
+# Pemetaan rute yang biasanya dilakukan server.js
+[[redirects]]
+  from = "/"
+  to = "/home.html"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/play"
+  to = "/index.html"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/guru"
+  to = "/teacher.html"
+  status = 200
+  force = true

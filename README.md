@@ -1,86 +1,93 @@
 # CELLBOUND: Inside The Cell · Mode Kelas (Multiplayer)
 
-Game edukasi 3D tentang organel sel. Guru membuat kelas dengan kode, siswa bergabung dari browser masing-masing.
+Game edukasi 3D tentang organel sel untuk siswa SMA. Guru membuat kelas dengan kode unik, siswa bergabung dari browser masing-masing untuk menjelajah sel bersama secara real-time dan berlomba menjawab kuis cepat.
 
-## Menjalankan
-Butuh Node.js 18+. (Dependensi `ws` sudah disertakan di `node_modules`; jika perlu: `npm install`.)
+---
 
-    npm start            # atau: node server.js
-    PORT=8080 npm start  # ganti port
+## Opsi Menjalankan & Deploy
+
+Aplikasi ini mendukung 2 mode deployment:
+1. **Cloudflare Workers (Rekomendasi - Serverless & Edge)**:
+   - WebSocket berjalan di atas **Cloudflare Durable Objects** sehingga state kelas & pemain tersinkronkan secara global.
+   - Aset frontend disajikan langsung lewat **Cloudflare Workers Assets**.
+   - Cukup 1 perintah deploy (`npx wrangler deploy`), langsung dapat domain HTTPS + WSS gratis.
+2. **Node.js Lokal / VPS / PaaS**:
+   - Menjalankan `server.js` bawaan menggunakan pustaka `ws`.
+
+---
+
+## 1. Menjalankan di Cloudflare Workers
+
+### A. Pengujian Lokal (Development)
+Jalankan perintah berikut:
+```bash
+npm run dev
+# atau: npx wrangler dev
+```
+Buka alamat yang muncul di terminal (biasanya `http://localhost:8787`).
+
+### B. Deploy ke Cloudflare Workers
+1. Pastikan sudah login ke akun Cloudflare di CLI:
+   ```bash
+   npx wrangler login
+   ```
+2. Deploy Worker:
+   ```bash
+   npm run deploy
+   # atau: npx wrangler deploy
+   ```
+3. Cloudflare akan memberikan URL publik (contoh: `https://cellbound-kelas.<subdomain>.workers.dev`).
+   - Halaman Siswa: `https://cellbound-kelas.<subdomain>.workers.dev/`
+   - Dashboard Guru: `https://cellbound-kelas.<subdomain>.workers.dev/guru`
+
+> **Catatan Durable Objects**: Cloudflare Workers kini menyertakan Durable Objects pada paket gratis (Free Tier). Sinkronisasi multi-pemain dan WebSocket berjalan otomatis tanpa server tambahan.
+
+---
+
+## 2. Menjalankan di Node.js (Lokal / VPS)
+
+Butuh Node.js 18+.
+
+```bash
+npm start            # atau: node server.js
+PORT=8080 npm start  # jika ingin port lain
+```
 
 1. Guru membuka `http://<alamat-server>:3000/guru` -> tampil KODE KELAS.
-2. Siswa membuka `http://<alamat-server>:3000/`, klik **Gabung Kelas**, isi nama + kode
-   (atau langsung buka tautan `/?kode=ABCDE`).
-3. Semua siswa menjelajah sel bersama (avatar berwarna, emote 1-4, papan skor langsung).
+2. Siswa membuka `http://<alamat-server>:3000/`, klik **Gabung Kelas**, isi nama + kode (atau langsung buka `/?kode=ABCDE`).
+3. Semua siswa menjelajah sel bersama (avatar 3D berwarna, emote 1-4, leaderboard real-time).
 4. Guru menekan **Mulai Kuis Balapan**: 10 soal acak, 20 detik per soal. Skor = 100 + bonus kecepatan (+50 untuk yang tercepat benar).
 
-Satu laptop guru dan siswa harus berada di jaringan yang sama (Wi-Fi sekolah), atau deploy ke hosting Node.js
-(Render, Railway, Fly.io, VPS). Bila memakai HTTPS, WebSocket otomatis memakai wss://.
+---
 
-Mode solo tetap tersedia: klik **Mulai Misi** (tanpa server pun bisa dibuka lewat `public/index.html`, kecuali Mode Kelas).
+## Struktur Proyek
 
-## Struktur
-- `server.js` : server HTTP + WebSocket (ruang kelas, sinkron posisi 10 Hz, kuis, skor). Kunci jawaban hanya di server.
-- `public/index.html` : game 3D (Three.js lokal) · `public/mp.js` : klien multiplayer
-- `public/char.js` + `public/models/` : karakter pemain 3D (Cellcy) dan animasi proseduralnya
-- `public/teacher.html` : dashboard guru (progres siswa, skor, analisis soal yang sering salah)
+```text
+cellbound-kelas/
+├── src/
+│   ├── worker.js           # Entrypoint Cloudflare Workers (Routing + WS DO upgrade)
+│   ├── game-server.js      # Durable Object: Logika WebSocket multiplayer & kuis
+│   └── constants.js        # Bank soal, daftar organel, konfigurasi game
+├── public/                 # Berkas statis frontend
+│   ├── home.html           # Halaman awal / rute /
+│   ├── index.html          # Game 3D / rute /play
+│   ├── teacher.html        # Dashboard guru / rute /guru
+│   ├── mp.js               # Klien multiplayer WebSocket
+│   ├── char.js             # Karakter 3D Cellcy & animasi prosedural
+│   ├── joystick.js         # Kontrol sentuh / virtual joystick
+│   ├── zona2.js            # Zona 2: Pabrik Protein (solo)
+│   ├── lib/                # Three.js add-ons (GLTFLoader, Bloom, Composer)
+│   └── models/             # Model 3D Cellcy (GLB & fallback Base64)
+├── server.js               # Server Node.js mandiri (alternatif tanpa wrangler)
+├── wrangler.jsonc          # Konfigurasi Cloudflare Workers + Assets + Durable Objects
+└── package.json
+```
 
-## Catatan
-Batas 80 siswa per kelas. Kelas disimpan di memori server (hilang saat server restart).
-Dashboard guru menyimpan kode di sessionStorage, jadi refresh halaman guru tidak memutus kelas.
+---
 
-## Visual v2
-Tekstur prosedural (bump/roughness noise), material fisik berkilau (clearcoat + pantulan environment),
-shader fresnel/rim, wobble organik, kaustik di lantai, langit-langit sitoplasma (GLSL), bokeh & berkas cahaya,
-bloom, jejak probe, percikan + guncangan kamera saat menemukan organel, membran bergelombang.
-Perangkat lemah/HP lama: tambahkan `?lq=1` pada alamat untuk mematikan bloom (mis. `/?lq=1&kode=ABCDE`).
-Atur kecerahan: tambahkan `?exp=0.8` (lebih gelap) atau `?exp=1.1` (lebih terang) pada alamat. Bloom: `?lq=1` untuk mematikan.
+## Fitur Game
 
-## Port
-Jika port 3000 sedang dipakai, server otomatis mencoba 3001, 3002, dst. (sampai 30 kali) dan menampilkan alamat guru serta alamat siswa (IP jaringan) di terminal. Port awal bisa diganti dengan `PORT=8080 npm start`.
-
-## Zona 2: The Protein Factory (solo)
-Buka dari layar awal ("Zona 2: Pabrik Protein") atau dari kartu penutup Zona 1.
-Semua interaksi berupa seret objek langsung di dunia 3D:
-1. Translasi: seret tRNA dengan antikodon yang berpasangan dengan kodon mRNA (A-U, G-C) ke ribosom.
-2. RE kasar: seret polipeptida ke translokon, lihat pelipatan protein, lalu seret vesikel menyusuri jalur ke Golgi.
-3. Golgi: seret 2 gugus gula ke situs pengikat (glikosilasi), lalu seret vesikel ke tujuan yang benar (lisosom atau membran sel).
-Zona 2 belum tersedia di mode kelas (multiplayer).
-
-### Pembaruan visual & kemudahan (Zona 2 v2)
-- mRNA kini untai dengan basa berhuruf (A/U/G/C) + bingkai situs A; tRNA berbentuk L dengan huruf antikodon; protein berupa pita pelangi; RE kasar bertumpuk, Golgi sisterna tipis, membran bilayer.
-- Zona 1: nukleus berisi heliks ganda DNA (pasangan basa berwarna).
-- Lebih mudah: legenda pasangan basa, bingkai hijau/merah saat tRNA didekatkan, area jatuh lebih besar, petunjuk berdenyut setelah salah atau diam 9 detik, klik tanpa menggeser tidak dihitung jawaban.
-
-### Zona 2 v3
-- Kodon/antikodon bergaya DNA: untai mRNA berupa tulang punggung heliks dengan basa berhuruf sebagai anak tangga; tRNA punya lengan antikodon heliks yang sama.
-- Protein berbentuk kartun sungguhan: heliks alfa (merah), lembaran beta (kuning), lengkungan (abu-abu).
-- Penyortiran lebih jelas: label berwarna LISOSOM (hijau) dan MEMBRAN SEL (biru), jalur titik bergerak menuju masing-masing tujuan, dan area LUAR SEL di balik membran.
-
-### Tekstur sederhana (Zona 2)
-Permukaan halus ala clay (tanpa bump/noise), warna lebih lembut dan terang, tetap 3D lewat pencahayaan.
-
-## Joystick (Zona 1)
-- Joystick virtual muncul otomatis di perangkat sentuh (kiri bawah). Di desktop, klik tombol "Joystick: OFF/ON" di kanan bawah. Pilihan tersimpan.
-- Gamepad (USB/Bluetooth) langsung terbaca: stik kiri atau D-pad untuk bergerak, tombol A untuk interaksi (sama seperti tombol E).
-- Keyboard (WASD/panah) dan klik lantai tetap berfungsi.
-
-## Karakter 3D (Zona 1)
-Pemain memakai model **Cellcy** (`public/models/Cellcy.glb`, rig Mixamo, satu mesh skinned) yang berjalan,
-berbelok mengikuti arah gerak, dan diberi aura warna pemain.
-- Model asli 37 MB (tekstur 3×4096 px) sudah dioptimalkan menjadi ±1,4 MB (tekstur 1024 px + JPEG) agar cepat diunduh di Wi-Fi kelas. Geometri tidak diubah.
-- `public/lib/GLTFLoader.js` + `SkeletonUtils.js` (three r128) untuk memuat model dan mengkloning avatar teman di mode kelas.
-- `public/char.js` berisi animasi prosedural: lengan diturunkan otomatis dari pose-T, ayunan kaki/tangan mengikuti kecepatan, badan mengangguk, dan kepala bergoyang halus. Model ini tidak punya animasi bawaan, jadi tidak perlu file animasi.
-- Bila model gagal dimuat, game otomatis kembali memakai probe lama (tidak error).
-- Dibuka langsung dari `public/index.html` (file://)? Model tetap muncul karena tersedia salinan base64 `models/Cellcy.b64.js` (dimuat hanya pada file://).
-
-Mengganti karakter: timpa `public/models/Cellcy.glb` (rig Mixamo, menghadap +Z, tinggi ±1,7 unit) lalu sesuaikan `SCALE` di `public/char.js`.
-Untuk file://, buat ulang `public/models/Cellcy.b64.js` (base64 dari GLB).
-
-## Layar sempit (HP) di Zona 2
-Header, legenda, toast, dan panel petunjuk tidak lagi saling menimpa. Kamera otomatis menjauh pada layar potret agar semua tRNA dan target terlihat.
-
-## Beranda
-- `/` : beranda sederhana (pilih Zona 1, Zona 2, atau gabung kelas dengan nama + kode). Tautan guru `/?kode=ABCDE` mengisi kode otomatis.
-- `/play` : game itu sendiri. Parameter: `?go=zona1`, `?go=zona2`, `?go=join&kode=ABCDE&nama=Nama`.
-- `/guru` : dashboard guru.
+- **Zona 1 (The Explorer)**: Jelajahi sel hewan dalam 3D, temukan 13 organel, pelajari fungsinya, emote bersama teman, dan ikuti kuis balapan.
+- **Zona 2 (The Protein Factory)**: Simulasi perakitan protein interaktif (translasi mRNA di ribosom, modifikasi di RE kasar, penyortiran di Badan Golgi).
+- **Anti-Curang**: Kunci jawaban kuis dan perhitungan skor disimpan hanya di sisi server.
+- **Dukungan Kontrol Lengkap**: Keyboard (WASD/panah), mouse klik lantai, virtual joystick untuk HP/layar sentuh, dan Gamepad Bluetooth/USB.
