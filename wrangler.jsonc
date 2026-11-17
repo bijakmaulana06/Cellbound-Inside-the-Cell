@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "cellbound-kelas",
+  "name": "cellbound-inside-the-cell",
   "main": "src/worker.js",
   "compatibility_date": "2025-02-14",
   "assets": {
@@ -19,7 +19,7 @@
   "migrations": [
     {
       "tag": "v1",
-      "new_classes": ["GameServer"]
+      "new_sqlite_classes": ["GameServer"]
     }
   ]
 }
