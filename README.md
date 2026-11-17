@@ -91,3 +91,18 @@ cellbound-kelas/
 - **Zona 2 (The Protein Factory)**: Simulasi perakitan protein interaktif (translasi mRNA di ribosom, modifikasi di RE kasar, penyortiran di Badan Golgi).
 - **Anti-Curang**: Kunci jawaban kuis dan perhitungan skor disimpan hanya di sisi server.
 - **Dukungan Kontrol Lengkap**: Keyboard (WASD/panah), mouse klik lantai, virtual joystick untuk HP/layar sentuh, dan Gamepad Bluetooth/USB.
+
+---
+
+## Karakter 3D & Animasi
+
+- **Sumber model**: `cellcy_full_rigged.fbx` (rig **AccuRig**, 94 tulang, wajah tanpa morph target) yang dikonversi menjadi `public/models/Cellcy.glb` (~2,4 MB, tekstur base color + normal JPEG 1024²).
+- **Normalisasi**: tinggi 1,7 unit (di-scale 3x di game), kaki di `y=0`, menghadap sumbu +Z.
+- **Animasi prosedural** di `public/char.js` (tanpa klip animasi):
+  - **Diam**: napas, geser berat badan, kepala melihat sekitar.
+  - **Jalan**: siklus dua kaki dengan kurva Catmull-Rom untuk paha/lutut/pergelangan/jari kaki, ayunan lengan berlawanan, oleng panggul, serta koreksi lantai agar kaki tumpuan tidak melayang.
+  - **Emote 1-4** (tombol emoji atau angka 1-4): 👋 lambaian tangan terbuka, 👍 genggaman + jempol, 🤔 tangan menyentuh dagu, 🎉 dua tangan ke atas + lompat kecil. Di mode kelas, emote ikut tersinkron ke avatar pemain lain.
+- **Fallback `file://`**: `public/models/Cellcy.b64.js` adalah salinan Base64 dari GLB agar karakter tetap muncul saat `index.html` dibuka langsung tanpa server. Setelah mengganti GLB, buat ulang dengan:
+  ```bash
+  node -e "const fs=require('fs');fs.writeFileSync('public/models/Cellcy.b64.js','// CELLBOUND: salinan base64 Cellcy.glb agar karakter tetap muncul saat game dibuka langsung dari file:// (tanpa server).\nwindow.CELLCY_GLB=\"'+fs.readFileSync('public/models/Cellcy.glb').toString('base64')+'\";\n')"
+  ```
