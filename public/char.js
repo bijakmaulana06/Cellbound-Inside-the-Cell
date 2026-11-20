@@ -481,7 +481,7 @@
                 const isChest = /胸|breast|chest|おっぱい|oppai|乳/i.test(bName);
                 const pmxDamp = clamp(((rb.positionDamping ?? .7) + (rb.rotationDamping ?? .7)) * .5, .4, 1);
 
-                const tipFrac = chainLen > 1 ? i / (chainLen - 1) : 1; // 0 di pangkal -> 1 di ujung (aliran sutra bertahap ala WuWa)
+                const tipFrac = chainLen > 1 ? i / (chainLen - 1) : 1; // 0 di pangkal -> 1 di ujung
                 const tipW = tipLocal.clone().applyMatrix4(bone.matrixWorld);
                 pts.push({
                     pos: tipW.clone(),
@@ -490,10 +490,12 @@
                     len: worldLen,
                     isChest,
                     tipFrac,
-                    // gaya KawaiiPhysics / Wuthering Waves: pangkal lebih stabil, makin ke ujung makin ringan & mengalir seperti sutra
-                    stiffness: isChest ? .26 : Math.max(.055, .19 - tipFrac * .125),
-                    drag: isChest ? .20 : clamp(.26 - tipFrac * .11 + (pmxDamp - .7) * .05, .13, .30),
-                    gravity: isChest ? .012 : (.022 + tipFrac * .014),
+                    // TRUE KawaiiPhysics (Unreal Engine / Wuthering Waves):
+                    // Stiffness sangat lembut (0.045 di pangkal -> 0.008 di ujung) & Damping ringan (0.12 -> 0.06)
+                    // sehingga rambut & kain benar-benar mengalir bebas mengikuti inersia, angin, dan belokan!
+                    stiffness: isChest ? .26 : Math.max(.008, .048 - tipFrac * .040),
+                    drag: isChest ? .20 : clamp(.13 - tipFrac * .065 + (pmxDamp - .7) * .02, .055, .15),
+                    gravity: isChest ? .012 : (.035 + tipFrac * .025),
                     cols: buildColliderList(tipW, rb, worldLen, isChest)
                 });
 
@@ -503,8 +505,8 @@
                     localDir,
                     worldLen,
                     isChest,
-                    maxAngle: isChest ? .28 : clamp(.78 / Math.sqrt(chainLen), .18, .40),
-                    smoothRate: isChest ? 20 : Math.max(13, 18 - tipFrac * 4.5)
+                    maxAngle: isChest ? .28 : clamp(.98 / Math.sqrt(chainLen), .26, .56),
+                    smoothRate: isChest ? 20 : 32
                 });
             }
 
@@ -567,8 +569,10 @@
         phys.rootDelta.subVectors(_vA, phys.prevRootPos);
         phys.prevRootPos.copy(_vA);
         const teleported = phys.rootDelta.lengthSq() > 4;
-        const carryXZ = teleported ? 1.0 : .80;
-        const carryY = teleported ? 1.0 : .25;
+        // KawaiiPhysics WorldDampingLocation rendah (0.35 pangkal -> 0.12 ujung) agar 65%-88% gerak lari
+        // menciptakan aliran inersia rambut & kain yang nyata ke belakang (seperti Wuthering Waves)!
+        const carryXZ = teleported ? 1.0 : .36;
+        const carryY = teleported ? 1.0 : .18;
         const chestCarryXZ = teleported ? 1.0 : .55;
         const chestCarryY = teleported ? 1.0 : .0;
         const dxRoot = phys.rootDelta.x, dyRoot = phys.rootDelta.y, dzRoot = phys.rootDelta.z;
@@ -609,29 +613,29 @@
                 pts[k + 1].rest.copy(pts[k].rest).addScaledVector(_vB, nodes[k].worldLen);
             }
 
-            // 2. Integrasi Verlet untuk pts[1..L] (inersia bertahap dari pangkal -> ujung supaya berkibar seperti sutra)
+            // 2. Integrasi Verlet KawaiiPhysics untuk pts[1..L]
             for (let k = 1; k <= L; k++) {
                 const p = pts[k];
                 const tf = p.tipFrac || 0;
-                const cXZ = teleported ? 1.0 : (p.isChest ? chestCarryXZ : (carryXZ - tf * .26));
-                const cY = teleported ? 1.0 : (p.isChest ? chestCarryY : (carryY - tf * .12));
+                const cXZ = teleported ? 1.0 : (p.isChest ? chestCarryXZ : Math.max(.10, carryXZ - tf * .24));
+                const cY = teleported ? 1.0 : (p.isChest ? chestCarryY : Math.max(.04, carryY - tf * .12));
                 const cx = dxRoot * cXZ, cy = dyRoot * cY, cz = dzRoot * cXZ;
                 p.pos.x += cx; p.pos.y += cy; p.pos.z += cz;
                 p.prev.x += cx; p.prev.y += cy; p.prev.z += cz;
 
                 _vD.subVectors(p.pos, p.prev).multiplyScalar(1 - p.drag);
-                const maxV = p.len * (p.isChest ? .35 : (.26 + tf * .12));
+                const maxV = p.len * (p.isChest ? .35 : (.38 + tf * .18));
                 if (_vD.lengthSq() > maxV * maxV) _vD.setLength(maxV);
 
                 p.prev.copy(p.pos);
                 p.pos.add(_vD);
-                p.pos.addScaledVector(_vF.subVectors(p.rest, p.pos), Math.min(.75, p.stiffness * dtScale));
+                p.pos.addScaledVector(_vF.subVectors(p.rest, p.pos), Math.min(.5, p.stiffness * dtScale));
                 p.pos.y -= p.gravity * p.len * step;
                 if (!p.isChest) {
-                    const wave = Math.sin(t * (1.6 + moveFactor * 1.4) + ch.chainPhase - k * .52);
-                    const flutter = .35 + tf * .85;
-                    p.pos.x += (wxBase + wave * windAmp * .65) * p.len * flutter;
-                    p.pos.z += (wzBase + wave * windAmp * .55) * p.len * flutter;
+                    const wave = Math.sin(t * (1.7 + moveFactor * 1.5) + ch.chainPhase - k * .58);
+                    const flutter = .30 + tf * 1.0;
+                    p.pos.x += (wxBase + wave * windAmp * .75) * p.len * flutter;
+                    p.pos.z += (wzBase + wave * windAmp * .65) * p.len * flutter;
                 }
             }
 
@@ -695,14 +699,13 @@
                     pts[k + 1].pos.copy(pts[k].pos).addScaledVector(_vF, n.worldLen);
                 }
 
-                // konversi arah target dunia -> ruang rest lokal bone
+                // konversi arah target dunia -> ruang rest lokal bone (langsung dari Verlet KawaiiPhysics tanpa double-lag)
                 _qDelta.copy(qRestBoneW).invert();
                 _vG.copy(_vF).applyQuaternion(_qDelta).normalize();
                 _qDelta.setFromUnitVectors(n.localDir, _vG);
                 _qTarget.copy(n.restQ).multiply(_qDelta);
 
-                const rate = chainCollided ? 28 : n.smoothRate;
-                const slerpK = 1 - Math.exp(-step * rate);
+                const slerpK = 1 - Math.exp(-step * (chainCollided ? 40 : n.smoothRate));
                 n.b.quaternion.slerp(_qTarget, slerpK);
 
                 // propagate worldQ & matrixWorld untuk bone berikutnya di rantai
