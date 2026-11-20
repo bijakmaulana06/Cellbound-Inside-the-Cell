@@ -26,6 +26,8 @@ const MIME = {
   '.glb': 'model/gltf-binary',
   '.gltf': 'model/gltf+json',
   '.fbx': 'application/octet-stream',
+  '.part0': 'application/octet-stream',
+  '.part1': 'application/octet-stream',
   '.pmx': 'application/octet-stream',
   '.pmd': 'application/octet-stream',
   '.vmd': 'application/octet-stream',
@@ -59,6 +61,7 @@ function scanMmdDirectory() {
       type: 'fbx',
       format: 'FBX',
       url: 'models/cellcy_full_rigged.fbx',
+      parts: ['models/cellcy_full_rigged.fbx.part0', 'models/cellcy_full_rigged.fbx.part1'],
       builtin: true,
     },
   ];

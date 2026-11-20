@@ -9,6 +9,7 @@
         type: 'fbx',
         format: 'FBX',
         url: 'models/cellcy_full_rigged.fbx',
+        parts: ['models/cellcy_full_rigged.fbx.part0', 'models/cellcy_full_rigged.fbx.part1'],
         builtin: true
     };
     const STORAGE_KEY = 'cellbound_char_id';
@@ -1117,12 +1118,31 @@
             );
         } else {
             if (!fbxLoader) return onError(def, seq, 'FBXLoader tidak tersedia');
-            fbxLoader.load(
-                def.url,
-                obj => mountModel(obj, def, seq),
-                p => onProgress(def.name, p),
-                err => onError(def, seq, err)
-            );
+            const parts = Array.isArray(def.parts) && def.parts.length
+                ? def.parts
+                : (def.id === DEFAULT_CHAR.id ? DEFAULT_CHAR.parts : null);
+            if (parts && parts.length) {
+                const basePath = (def.url || 'models/').replace(/[^/]*$/, '');
+                Promise.all(parts.map(u => fetch(u).then(r => {
+                    if (!r.ok) throw new Error('HTTP ' + r.status + ' (' + u + ')');
+                    return r.arrayBuffer();
+                }))).then(bufs => {
+                    if (seq !== loadSeq) return;
+                    const total = bufs.reduce((s, b) => s + b.byteLength, 0);
+                    const merged = new Uint8Array(total);
+                    let off = 0;
+                    for (const b of bufs) { merged.set(new Uint8Array(b), off); off += b.byteLength; }
+                    const obj = fbxLoader.parse(merged.buffer, basePath);
+                    mountModel(obj, def, seq);
+                }).catch(err => onError(def, seq, err));
+            } else {
+                fbxLoader.load(
+                    def.url,
+                    obj => mountModel(obj, def, seq),
+                    p => onProgress(def.name, p),
+                    err => onError(def, seq, err)
+                );
+            }
         }
     };
 

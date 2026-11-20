@@ -8,6 +8,10 @@
       "type": "fbx",
       "format": "FBX",
       "url": "models/cellcy_full_rigged.fbx",
+      "parts": [
+        "models/cellcy_full_rigged.fbx.part0",
+        "models/cellcy_full_rigged.fbx.part1"
+      ],
       "builtin": true
     }
   ]

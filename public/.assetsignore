@@ -1,0 +1,4 @@
+# Exclude local MMD models from Cloudflare Workers Static Assets deploy
+models/mmd/*
+!models/mmd/README.txt
+!models/mmd/characters.json
