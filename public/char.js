@@ -399,8 +399,8 @@
                 // minR = restDist * 0.98 saat posisi rest memang lebih dekat dari fullR -> NOL dorongan/patah saat diam,
                 // tapi langsung mendorong keluar begitu kaki/badan bergerak lebih dekat dari jarak rest!
                 const minR = restDist < fullR ? restDist * .98 : fullR;
-                // saat berjalan (speed > 0), tambah sedikit bantalan ekstra khusus collider kaki agar lutut/paha tak pernah menembus rok
-                const movePad = c.isLeg ? (c.radius * .14) : 0;
+                // saat bergerak, tambah bantalan anti-tembus pada collider kaki & badan agar rok/baju selalu terdorong keluar sebelum menembus
+                const movePad = c.isLeg ? (c.radius * .22) : (c.radius * .06);
                 list.push({ c, minR, movePad, outLocal });
             }
             return list;
@@ -490,12 +490,10 @@
                     len: worldLen,
                     isChest,
                     tipFrac,
-                    // TRUE KawaiiPhysics (Unreal Engine / Wuthering Waves):
-                    // Stiffness sangat lembut (0.045 di pangkal -> 0.008 di ujung) & Damping ringan (0.12 -> 0.06)
-                    // sehingga rambut & kain benar-benar mengalir bebas mengikuti inersia, angin, dan belokan!
-                    stiffness: isChest ? .26 : Math.max(.008, .048 - tipFrac * .040),
-                    drag: isChest ? .20 : clamp(.13 - tipFrac * .065 + (pmxDamp - .7) * .02, .055, .15),
-                    gravity: isChest ? .012 : (.035 + tipFrac * .025),
+                    // KawaiiPhysics sweet-spot (halus seperti sutra Wuthering Waves, anti-getar & tidak sensitif berlebihan):
+                    stiffness: isChest ? .26 : Math.max(.022, .078 - tipFrac * .056),
+                    drag: isChest ? .20 : clamp(.23 - tipFrac * .08 + (pmxDamp - .7) * .03, .145, .26),
+                    gravity: isChest ? .012 : (.026 + tipFrac * .018),
                     cols: buildColliderList(tipW, rb, worldLen, isChest)
                 });
 
@@ -505,8 +503,8 @@
                     localDir,
                     worldLen,
                     isChest,
-                    maxAngle: isChest ? .28 : clamp(.98 / Math.sqrt(chainLen), .26, .56),
-                    smoothRate: isChest ? 20 : 32
+                    maxAngle: isChest ? .28 : clamp(.86 / Math.sqrt(chainLen), .22, .46),
+                    smoothRate: isChest ? 20 : 18
                 });
             }
 
@@ -569,10 +567,10 @@
         phys.rootDelta.subVectors(_vA, phys.prevRootPos);
         phys.prevRootPos.copy(_vA);
         const teleported = phys.rootDelta.lengthSq() > 4;
-        // KawaiiPhysics WorldDampingLocation rendah (0.35 pangkal -> 0.12 ujung) agar 65%-88% gerak lari
-        // menciptakan aliran inersia rambut & kain yang nyata ke belakang (seperti Wuthering Waves)!
-        const carryXZ = teleported ? 1.0 : .36;
-        const carryY = teleported ? 1.0 : .18;
+        // KawaiiPhysics WorldDampingLocation seimbang (0.56 pangkal -> 0.34 ujung):
+        // tetap mengalir lembut saat lari/belok tapi tidak kaget/bergetar pada gerakan kecil
+        const carryXZ = teleported ? 1.0 : .56;
+        const carryY = teleported ? 1.0 : .22;
         const chestCarryXZ = teleported ? 1.0 : .55;
         const chestCarryY = teleported ? 1.0 : .0;
         const dxRoot = phys.rootDelta.x, dyRoot = phys.rootDelta.y, dzRoot = phys.rootDelta.z;
@@ -586,9 +584,9 @@
             c.bone.matrixWorld.decompose(_vA, c.worldQ, _vB);
         }
 
-        // angin halus sitoplasma + aliran udara lari (gelombang merambat dari pangkal ke ujung ala Wuthering Waves)
+        // angin halus sitoplasma + aliran udara lari (tenang saat diam, mengalir mulus saat lari)
         const moveFactor = Math.min(1, speed / 4);
-        const windAmp = (.0028 + moveFactor * .0075) * dtScale;
+        const windAmp = (.0016 + moveFactor * .0042) * dtScale;
         const wxBase = Math.sin(t * 1.35) * windAmp;
         const wzBase = Math.cos(t * 1.05) * windAmp;
 
@@ -617,14 +615,14 @@
             for (let k = 1; k <= L; k++) {
                 const p = pts[k];
                 const tf = p.tipFrac || 0;
-                const cXZ = teleported ? 1.0 : (p.isChest ? chestCarryXZ : Math.max(.10, carryXZ - tf * .24));
-                const cY = teleported ? 1.0 : (p.isChest ? chestCarryY : Math.max(.04, carryY - tf * .12));
+                const cXZ = teleported ? 1.0 : (p.isChest ? chestCarryXZ : Math.max(.32, carryXZ - tf * .22));
+                const cY = teleported ? 1.0 : (p.isChest ? chestCarryY : Math.max(.10, carryY - tf * .10));
                 const cx = dxRoot * cXZ, cy = dyRoot * cY, cz = dzRoot * cXZ;
                 p.pos.x += cx; p.pos.y += cy; p.pos.z += cz;
                 p.prev.x += cx; p.prev.y += cy; p.prev.z += cz;
 
                 _vD.subVectors(p.pos, p.prev).multiplyScalar(1 - p.drag);
-                const maxV = p.len * (p.isChest ? .35 : (.38 + tf * .18));
+                const maxV = p.len * (p.isChest ? .35 : (.24 + tf * .10));
                 if (_vD.lengthSq() > maxV * maxV) _vD.setLength(maxV);
 
                 p.prev.copy(p.pos);
@@ -639,9 +637,9 @@
                 }
             }
 
-            // 3. PBD / FABRIK 2-Arah (2 iterasi — cepat 60fps & anti-tembus):
+            // 3. PBD / FABRIK 2-Arah (3 iterasi — ekstra rapat anti-tembus baju/rok & tetap 60fps):
             let chainCollided = false;
-            for (let iter = 0; iter < 2; iter++) {
+            for (let iter = 0; iter < 3; iter++) {
                 // Backward pass: dorong keluar collider & tarik segmen atas ikut terangkat mulus
                 for (let k = L; k >= 1; k--) {
                     const p = pts[k];
@@ -705,7 +703,7 @@
                 _qDelta.setFromUnitVectors(n.localDir, _vG);
                 _qTarget.copy(n.restQ).multiply(_qDelta);
 
-                const slerpK = 1 - Math.exp(-step * (chainCollided ? 40 : n.smoothRate));
+                const slerpK = 1 - Math.exp(-step * (chainCollided ? 48 : n.smoothRate));
                 n.b.quaternion.slerp(_qTarget, slerpK);
 
                 // propagate worldQ & matrixWorld untuk bone berikutnya di rantai
