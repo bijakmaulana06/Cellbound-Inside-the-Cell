@@ -396,9 +396,9 @@
                 if (restDist > 1e-4) {
                     outLocal.copy(outVec).divideScalar(restDist).applyQuaternion(c.invRestQ).normalize();
                 }
-                // minR = restDist * 0.99 saat lebih dekat dari fullR -> nol dorongan/mekar saat diam,
-                // tapi langsung mendorong keluar begitu kaki/badan bergerak mendekati kain!
-                const minR = restDist < fullR ? Math.max(c.radius * .72, restDist * .99) : fullR;
+                // minR = restDist * 0.98 saat posisi rest memang lebih dekat dari fullR -> NOL dorongan/patah saat diam,
+                // tapi langsung mendorong keluar begitu kaki/badan bergerak lebih dekat dari jarak rest!
+                const minR = restDist < fullR ? restDist * .98 : fullR;
                 // saat berjalan (speed > 0), tambah sedikit bantalan ekstra khusus collider kaki agar lutut/paha tak pernah menembus rok
                 const movePad = c.isLeg ? (c.radius * .14) : 0;
                 list.push({ c, minR, movePad, outLocal });
@@ -681,8 +681,8 @@
                 if (_vF.lengthSq() < 1e-10) _vF.copy(_vB);
                 else _vF.normalize();
 
-                // jika tidak sedang menahan tabrakan badan, batasi sudut ayunan bebas agar tetap kalem
-                const lim = chainCollided ? 1.35 : n.maxAngle;
+                // jika menahan tabrakan badan/kaki, izinkan sudut lebih lebar (maks ~48°/segmen) secara mulus tanpa patah
+                const lim = chainCollided ? Math.min(.85, Math.max(n.maxAngle * 2.4, .52)) : n.maxAngle;
                 const cosA = clamp(_vB.dot(_vF), -1, 1);
                 const ang = Math.acos(cosA);
                 if (ang > lim) {
@@ -698,12 +698,9 @@
                 _qDelta.setFromUnitVectors(n.localDir, _vG);
                 _qTarget.copy(n.restQ).multiply(_qDelta);
 
-                if (chainCollided) {
-                    n.b.quaternion.copy(_qTarget);
-                } else {
-                    const slerpK = 1 - Math.exp(-step * n.smoothRate);
-                    n.b.quaternion.slerp(_qTarget, slerpK);
-                }
+                const rate = chainCollided ? 28 : n.smoothRate;
+                const slerpK = 1 - Math.exp(-step * rate);
+                n.b.quaternion.slerp(_qTarget, slerpK);
 
                 // propagate worldQ & matrixWorld untuk bone berikutnya di rantai
                 _qRestW.multiply(n.b.quaternion);
