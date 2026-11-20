@@ -453,10 +453,172 @@
       box-shadow: none;
       border-radius: 99px
     }
+
+    #boot-loader {
+      position: fixed;
+      inset: 0;
+      z-index: 95;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      background: radial-gradient(circle at 50% 42%, #09354a 0%, #041824 52%, #020c14 100%);
+      transition: opacity .45s ease, visibility .45s ease
+    }
+
+    #boot-loader.done {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none
+    }
+
+    .ld-box {
+      width: min(440px, 92vw);
+      text-align: center;
+      background: rgba(6, 28, 42, .86);
+      border: 1px solid rgba(79, 240, 208, .28);
+      border-radius: 24px;
+      padding: 30px 26px 26px;
+      box-shadow: 0 24px 90px rgba(0, 0, 0, .65), 0 0 42px rgba(79, 240, 208, .12);
+      backdrop-filter: blur(12px)
+    }
+
+    .ld-orb {
+      position: relative;
+      width: 78px;
+      height: 78px;
+      margin: 0 auto 18px
+    }
+
+    .ld-orb span {
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      border: 2.5px solid transparent;
+      border-top-color: var(--acc);
+      border-right-color: rgba(79, 240, 208, .35);
+      animation: ldspin 1.15s linear infinite
+    }
+
+    .ld-orb span:nth-child(2) {
+      inset: 10px;
+      border-top-color: var(--acc2);
+      border-right-color: transparent;
+      border-left-color: rgba(255, 179, 71, .45);
+      animation-duration: 1.7s;
+      animation-direction: reverse
+    }
+
+    .ld-orb i {
+      position: absolute;
+      inset: 24px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 35% 30%, #9afff0, #4ff0d0 55%, #0c6270);
+      box-shadow: 0 0 24px rgba(79, 240, 208, .7);
+      animation: ldpulse 1.6s ease-in-out infinite
+    }
+
+    @keyframes ldspin {
+      to {
+        transform: rotate(360deg)
+      }
+    }
+
+    @keyframes ldpulse {
+      0%, 100% {
+        transform: scale(.9);
+        opacity: .85
+      }
+      50% {
+        transform: scale(1.08);
+        opacity: 1
+      }
+    }
+
+    .ld-tag {
+      display: inline-block;
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: .16em;
+      color: #032a30;
+      background: var(--acc);
+      padding: 3px 11px;
+      border-radius: 99px;
+      margin-bottom: 10px
+    }
+
+    .ld-box h1 {
+      margin: 0 0 6px;
+      font-size: 22px;
+      letter-spacing: .04em
+    }
+
+    .ld-status {
+      font-size: 13px;
+      color: #cfeaf1;
+      min-height: 20px;
+      margin: 0 0 14px
+    }
+
+    .ld-bar {
+      height: 8px;
+      background: #0d3244;
+      border: 1px solid rgba(79, 240, 208, .2);
+      border-radius: 99px;
+      overflow: hidden
+    }
+
+    .ld-bar i {
+      display: block;
+      height: 100%;
+      width: 4%;
+      border-radius: 99px;
+      background: linear-gradient(90deg, var(--acc), #79f7ff, var(--acc2));
+      box-shadow: 0 0 14px rgba(79, 240, 208, .65);
+      transition: width .22s ease-out
+    }
+
+    .ld-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 9px;
+      font-size: 11.5px;
+      color: var(--mut)
+    }
+
+    .ld-pct {
+      font-weight: 800;
+      color: var(--acc);
+      font-variant-numeric: tabular-nums
+    }
+
+    .ld-tip {
+      margin: 16px 0 0;
+      padding-top: 12px;
+      border-top: 1px solid rgba(79, 240, 208, .12);
+      font-size: 11.5px;
+      line-height: 1.5;
+      color: var(--mut)
+    }
   </style>
 </head>
 
 <body>
+  <div id="boot-loader" role="status" aria-live="polite">
+    <div class="ld-box">
+      <div class="ld-orb"><span></span><span></span><i></i></div>
+      <span class="ld-tag">CELLBOUND · ZONA 1</span>
+      <h1>Menyiapkan Dunia Sel 3D</h1>
+      <p class="ld-status" id="ld-status">Memuat mesin grafis & pustaka 3D…</p>
+      <div class="ld-bar"><i id="ld-fill"></i></div>
+      <div class="ld-meta">
+        <span id="ld-sub">Inisialisasi WebGL</span>
+        <span class="ld-pct" id="ld-pct">5%</span>
+      </div>
+      <p class="ld-tip">Seluruh aset 3D, tekstur, dan shader sedang dimuat &amp; dirender lebih dulu agar permainan berjalan mulus.</p>
+    </div>
+  </div>
   <div class="hud" id="hud"><b>ZONA 1 · THE EXPLORER</b>
     <ul id="list"></ul>
     <div class="bar"><i id="pb"></i></div>
@@ -900,6 +1062,47 @@
     // bloom
     const comp = (!LQ && T.EffectComposer && T.UnrealBloomPass) ? (() => { const c = new T.EffectComposer(R); c.addPass(new T.RenderPass(S, C)); c.addPass(new T.UnrealBloomPass(new T.Vector2(innerWidth, innerHeight), .28, .45, .9)); c.addPass(new T.ShaderPass({ uniforms: { tDiffuse: { value: null }, ex: { value: +(new URLSearchParams(location.search).get('exp') || .95) } }, vertexShader: 'varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}', fragmentShader: 'uniform sampler2D tDiffuse;uniform float ex;varying vec2 vUv;vec3 aces(vec3 x){return clamp((x*(2.51*x+.03))/(x*(2.43*x+.59)+.14),0.,1.);}void main(){vec4 c=texture2D(tDiffuse,vUv);gl_FragColor=vec4(aces(c.rgb*ex),1.);}' })); return c })() : null;
     addEventListener('resize', () => { comp && comp.setSize(innerWidth, innerHeight) });
+
+    // kontroler loading screen awal: memuat seluruh aset + pra-kompilasi shader & pra-render GPU sebelum masuk ke game
+    window.gameLoader = (() => {
+      const root = $('boot-loader'), fill = $('ld-fill'), st = $('ld-status'), sub = $('ld-sub'), pctEl = $('ld-pct');
+      let cur = 10, done = false;
+      function set(pct, text, detail) {
+        if (done) return;
+        cur = Math.max(cur, Math.min(100, pct));
+        if (fill) fill.style.width = cur.toFixed(1) + '%';
+        if (pctEl) pctEl.textContent = Math.round(cur) + '%';
+        if (text && st) st.textContent = text;
+        if (detail !== undefined && sub) sub.textContent = detail;
+      }
+      function prewarmAndFinish() {
+        if (done) return;
+        set(90, 'Mengompilasi shader & tekstur GPU…', 'Pra-render dunia 3D');
+        requestAnimationFrame(() => {
+          try {
+            if (typeof R.compile === 'function') R.compile(S, C);
+            if (typeof window.charTick === 'function') window.charTick(1 / 60, 0.016, 0);
+            if (comp) comp.render(); else R.render(S, C);
+          } catch (e) { console.warn('Prewarm render dilewati:', e); }
+          set(97, 'Menstabilkan frame awal…', 'Hampir siap');
+          requestAnimationFrame(() => {
+            try {
+              if (typeof window.charTick === 'function') window.charTick(1 / 60, 0.032, 0);
+              if (comp) comp.render(); else R.render(S, C);
+            } catch {}
+            set(100, 'Semua aset siap!', 'Memasuki dunia sel…');
+            setTimeout(() => {
+              done = true;
+              if (root) root.classList.add('done');
+            }, 220);
+          });
+        });
+      }
+      set(15, 'Dunia sel 3D & 13 organel siap', 'Menyiapkan karakter 3D…');
+      // pengaman: jika aset gagal/timeout lama, pastikan loading screen tetap terbuka
+      setTimeout(() => { if (!done) prewarmAndFinish(); }, 45000);
+      return { set, finish: prewarmAndFinish, isDone: () => done };
+    })();
 
     loop();
   </script>

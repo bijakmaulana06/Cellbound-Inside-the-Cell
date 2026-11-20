@@ -1075,16 +1075,73 @@
         try { localStorage.setItem(STORAGE_KEY, charDef.id); } catch {}
         syncPickerHighlight();
 
-        if (typeof toast === 'function') {
+        if (typeof toast === 'function' && (!window.gameLoader || window.gameLoader.isDone())) {
             const boneCount = rig ? rig.length : 0;
             toast(`Karakter <b>${esc(charDef.name)}</b> siap! (${isMmd ? 'MMD · ' + boneCount + ' bone aktif' : 'FBX Rig'})`, false, 3000);
+        }
+
+        // jika masih dalam loading screen awal, tunggu semua tekstur model selesai di-decode lalu pra-render GPU
+        if (window.gameLoader && !window.gameLoader.isDone()) {
+            window.gameLoader.set(86, `Memuat tekstur ${charDef.name}…`, 'Menyiapkan material 3D');
+            waitModelTextures(tpl).then(() => {
+                if (window.gameLoader && !window.gameLoader.isDone()) window.gameLoader.finish();
+            });
+        }
+    }
+
+    function waitModelTextures(rootObj) {
+        const imgs = [];
+        if (rootObj) {
+            rootObj.traverse(o => {
+                if (!o.isMesh || !o.material) return;
+                const mats = Array.isArray(o.material) ? o.material : [o.material];
+                for (const m of mats) {
+                    if (!m) continue;
+                    for (const k of ['map', 'normalMap', 'emissiveMap', 'alphaMap', 'gradientMap']) {
+                        const tex = m[k];
+                        const im = tex && tex.image;
+                        if (im && typeof im.complete === 'boolean' && !im.complete && !imgs.includes(im)) {
+                            imgs.push(im);
+                        }
+                    }
+                }
+            });
+        }
+        if (!imgs.length) return Promise.resolve();
+        return new Promise(resolve => {
+            let left = imgs.length;
+            const doneOne = () => { if (--left <= 0) resolve(); };
+            for (const im of imgs) {
+                im.addEventListener('load', doneOne, { once: true });
+                im.addEventListener('error', doneOne, { once: true });
+            }
+            setTimeout(resolve, 6000);
+        });
+    }
+
+    function reportBootProgress(name, loaded, total) {
+        if (!window.gameLoader || window.gameLoader.isDone()) return;
+        const mb = (loaded / 1048576).toFixed(1);
+        if (total > 0) {
+            const frac = clamp(loaded / total, 0, 1);
+            const pct = 25 + frac * 55; // 25% -> 80%
+            const totMb = (total / 1048576).toFixed(1);
+            window.gameLoader.set(pct, `Mengunduh aset ${name}…`, `${mb} / ${totMb} MB`);
+        } else if (loaded > 0) {
+            window.gameLoader.set(50, `Mengunduh aset ${name}…`, `${mb} MB`);
         }
     }
 
     function onProgress(name, p) {
-        if (p && p.total) showBadge(`Memuat ${name}… ${Math.round(p.loaded / p.total * 100)}%`);
-        else if (p && p.loaded) showBadge(`Memuat ${name}… ${(p.loaded / 1048576).toFixed(1)} MB`);
-        else showBadge(`Memuat ${name}…`);
+        if (p && p.total) {
+            showBadge(`Memuat ${name}… ${Math.round(p.loaded / p.total * 100)}%`);
+            reportBootProgress(name, p.loaded, p.total);
+        } else if (p && p.loaded) {
+            showBadge(`Memuat ${name}… ${(p.loaded / 1048576).toFixed(1)} MB`);
+            reportBootProgress(name, p.loaded, 0);
+        } else {
+            showBadge(`Memuat ${name}…`);
+        }
     }
 
     function onError(charDef, seq, e) {
@@ -1092,6 +1149,9 @@
         hideBadge();
         if (!tpl) probe.visible = true;
         console.warn('Gagal memuat karakter 3D:', charDef && charDef.url, e);
+        if (window.gameLoader && !window.gameLoader.isDone()) {
+            window.gameLoader.finish();
+        }
         if (typeof toast === 'function') {
             toast(`Gagal memuat <b>${esc(charDef ? charDef.name : 'karakter')}</b>. Pastikan berkas & teksturnya lengkap di folder direktori.`, true, 6000);
         }
@@ -1099,6 +1159,52 @@
 
     const fbxLoader = T.FBXLoader ? new T.FBXLoader() : null;
     const mmdLoader = T.MMDLoader ? new T.MMDLoader() : null;
+    const fbxBufCache = new Map();
+
+    // unduh berkas chunk FBX secara paralel dengan pelacakan progres byte real-time
+    async function fetchPartsWithProgress(parts, name, seq) {
+        const totals = new Array(parts.length).fill(0);
+        const loadeds = new Array(parts.length).fill(0);
+        const notify = () => {
+            if (seq !== loadSeq) return;
+            const l = loadeds.reduce((a, b) => a + b, 0);
+            const t = totals.reduce((a, b) => a + b, 0);
+            onProgress(name, { loaded: l, total: t });
+        };
+        const bufs = await Promise.all(parts.map(async (u, idx) => {
+            const r = await fetch(u);
+            if (!r.ok) throw new Error('HTTP ' + r.status + ' (' + u + ')');
+            const cl = +(r.headers.get('content-length') || 0);
+            if (cl > 0) totals[idx] = cl;
+            if (!r.body || !r.body.getReader) {
+                const ab = await r.arrayBuffer();
+                loadeds[idx] = ab.byteLength;
+                if (!totals[idx]) totals[idx] = ab.byteLength;
+                notify();
+                return new Uint8Array(ab);
+            }
+            const reader = r.body.getReader();
+            const chunks = [];
+            let got = 0;
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                chunks.push(value);
+                got += value.byteLength;
+                loadeds[idx] = got;
+                notify();
+            }
+            const out = new Uint8Array(got);
+            let off = 0;
+            for (const c of chunks) { out.set(c, off); off += c.byteLength; }
+            return out;
+        }));
+        const totalBytes = bufs.reduce((s, b) => s + b.byteLength, 0);
+        const merged = new Uint8Array(totalBytes);
+        let off = 0;
+        for (const b of bufs) { merged.set(b, off); off += b.byteLength; }
+        return merged.buffer;
+    }
 
     window.loadCharacter = function loadCharacter(charDef) {
         const def = charDef || DEFAULT_CHAR;
@@ -1106,13 +1212,21 @@
         activeChar = def;
         syncPickerHighlight();
         showBadge(`Memuat ${def.name}…`);
+        if (window.gameLoader && !window.gameLoader.isDone()) {
+            window.gameLoader.set(25, `Mengunduh aset ${def.name}…`, 'Menghubungkan ke server…');
+        }
 
         if (def.type === 'mmd') {
             if (!mmdLoader) return onError(def, seq, 'MMDLoader tidak tersedia');
             // resourcePath otomatis mengikuti folder .pmx/.pmd agar tekstur relatif ditemukan
             mmdLoader.load(
                 def.url,
-                mesh => mountModel(mesh, def, seq),
+                mesh => {
+                    if (window.gameLoader && !window.gameLoader.isDone()) {
+                        window.gameLoader.set(82, `Menyusun rig & fisika ${def.name}…`, 'Parsing bone MMD');
+                    }
+                    mountModel(mesh, def, seq);
+                },
                 p => onProgress(def.name, p),
                 err => onError(def, seq, err)
             );
@@ -1123,17 +1237,24 @@
                 : (def.id === DEFAULT_CHAR.id ? DEFAULT_CHAR.parts : null);
             if (parts && parts.length) {
                 const basePath = (def.url || 'models/').replace(/[^/]*$/, '');
-                Promise.all(parts.map(u => fetch(u).then(r => {
-                    if (!r.ok) throw new Error('HTTP ' + r.status + ' (' + u + ')');
-                    return r.arrayBuffer();
-                }))).then(bufs => {
+                const cacheKey = parts.join('|');
+                const cached = fbxBufCache.get(cacheKey);
+                const bufPromise = cached
+                    ? Promise.resolve(cached)
+                    : fetchPartsWithProgress(parts, def.name, seq).then(ab => { fbxBufCache.set(cacheKey, ab); return ab; });
+                bufPromise.then(ab => {
                     if (seq !== loadSeq) return;
-                    const total = bufs.reduce((s, b) => s + b.byteLength, 0);
-                    const merged = new Uint8Array(total);
-                    let off = 0;
-                    for (const b of bufs) { merged.set(new Uint8Array(b), off); off += b.byteLength; }
-                    const obj = fbxLoader.parse(merged.buffer, basePath);
-                    mountModel(obj, def, seq);
+                    if (window.gameLoader && !window.gameLoader.isDone()) {
+                        window.gameLoader.set(82, `Memproses model 3D ${def.name}…`, 'Parsing geometri & rig FBX');
+                    }
+                    // beri 1 frame agar UI progres sempat tergambar sebelum parsing sinkron FBX
+                    requestAnimationFrame(() => {
+                        if (seq !== loadSeq) return;
+                        try {
+                            const obj = fbxLoader.parse(ab, basePath);
+                            mountModel(obj, def, seq);
+                        } catch (err) { onError(def, seq, err); }
+                    });
                 }).catch(err => onError(def, seq, err));
             } else {
                 fbxLoader.load(
@@ -1220,6 +1341,9 @@
 
     // inisialisasi awal: pindai direktori -> muat karakter tersimpan atau Cellcy default
     (async () => {
+        if (window.gameLoader && !window.gameLoader.isDone()) {
+            window.gameLoader.set(20, 'Memindai daftar karakter…', 'Membaca katalog aset');
+        }
         await window.fetchCharacters();
         let savedId = null;
         try { savedId = localStorage.getItem(STORAGE_KEY); } catch {}
