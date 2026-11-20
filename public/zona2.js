@@ -25,7 +25,7 @@ function lab(txt,t,dy=0){const el=document.createElement('div');el.className='z2
 const rmLab=l=>{if(l){l.el.remove();LB=LB.filter(x=>x!==l)}};
 function M(c,o={}){const cs=o.caustic;delete o.caustic;const m=new T.MeshPhysicalMaterial(Object.assign({color:c,roughness:.55,metalness:0,clearcoat:.2,clearcoatRoughness:.4},o));
  m.customProgramCacheKey=()=>'z2'+(cs?'c':'');
- m.onBeforeCompile=s=>{s.uniforms.uT=TU;s.fragmentShader='uniform float uT;\n'+s.fragmentShader.replace('gl_FragColor = vec4( outgoingLight, diffuseColor.a );',`float fr=pow(1.0-abs(dot(normalize(vNormal),normalize(vViewPosition))),2.2);outgoingLight+=diffuseColor.rgb*fr*${cs?'0.0':'0.22'};${cs?'vec2 q=vUv*40.0;float cs=sin(q.x*1.7+uT)+sin(q.y*1.9-uT*1.2)+sin((q.x+q.y)*1.3+uT*.8);cs=pow(max(cs*.33+.5,0.),4.0);outgoingLight+=vec3(.12,.5,.55)*cs*.08;':''}gl_FragColor=vec4(outgoingLight,clamp(diffuseColor.a+fr*.3,0.,1.));`)};return m}
+ m.onBeforeCompile=s=>{s.uniforms.uT=TU;s.fragmentShader='uniform float uT;\n'+s.fragmentShader.replace('gl_FragColor = vec4( outgoingLight, diffuseColor.a );',`float fr=pow(clamp(1.0-abs(dot(normalize(vNormal),normalize(vViewPosition))),0.0,1.0),2.2);outgoingLight+=diffuseColor.rgb*fr*${cs?'0.0':'0.22'};${cs?'vec2 q=vUv*40.0;float cs=sin(q.x*1.7+uT)+sin(q.y*1.9-uT*1.2)+sin((q.x+q.y)*1.3+uT*.8);cs=pow(max(cs*.33+.5,0.),4.0);outgoingLight+=vec3(.12,.5,.55)*cs*.08;':''}gl_FragColor=vec4(outgoingLight,clamp(diffuseColor.a+fr*.3,0.,1.));`)};return m}
 const mesh=(g,m,p,s)=>{const o=new T.Mesh(g,m);if(p)o.position.set(...p);if(s)o.scale.set(...s);return o};
 const sph=(r,c,o,seg=24)=>mesh(new T.SphereGeometry(r,seg,Math.round(seg*.7)),M(c,o));
 // ---------- bentuk biologis ----------
