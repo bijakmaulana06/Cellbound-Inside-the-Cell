@@ -481,6 +481,7 @@
                 const isChest = /胸|breast|chest|おっぱい|oppai|乳/i.test(bName);
                 const pmxDamp = clamp(((rb.positionDamping ?? .7) + (rb.rotationDamping ?? .7)) * .5, .4, 1);
 
+                const tipFrac = chainLen > 1 ? i / (chainLen - 1) : 1; // 0 di pangkal -> 1 di ujung (aliran sutra bertahap ala WuWa)
                 const tipW = tipLocal.clone().applyMatrix4(bone.matrixWorld);
                 pts.push({
                     pos: tipW.clone(),
@@ -488,11 +489,11 @@
                     rest: tipW.clone(),
                     len: worldLen,
                     isChest,
-                    // dada memakai pegas elastis underdamped agar memantul lembut & hidup tiap langkah/belok/lompat,
-                    // sedangkan rambut & kain memakai redaman sutra MMD yang tetap responsif terhadap gerak vertikal
-                    stiffness: isChest ? .26 : (i === 0 ? .28 : Math.max(.16, .24 - i * .009)),
-                    drag: isChest ? .20 : clamp(.44 + pmxDamp * .10 - i * .006, .40, .58),
-                    gravity: isChest ? .012 : .018,
+                    tipFrac,
+                    // gaya KawaiiPhysics / Wuthering Waves: pangkal lebih stabil, makin ke ujung makin ringan & mengalir seperti sutra
+                    stiffness: isChest ? .26 : Math.max(.055, .19 - tipFrac * .125),
+                    drag: isChest ? .20 : clamp(.26 - tipFrac * .11 + (pmxDamp - .7) * .05, .13, .30),
+                    gravity: isChest ? .012 : (.022 + tipFrac * .014),
                     cols: buildColliderList(tipW, rb, worldLen, isChest)
                 });
 
@@ -502,8 +503,8 @@
                     localDir,
                     worldLen,
                     isChest,
-                    maxAngle: isChest ? .28 : clamp(.62 / Math.sqrt(chainLen), .14, .32),
-                    smoothRate: isChest ? 20 : Math.max(9.5, 13.5 - i * .35)
+                    maxAngle: isChest ? .28 : clamp(.78 / Math.sqrt(chainLen), .18, .40),
+                    smoothRate: isChest ? 20 : Math.max(13, 18 - tipFrac * 4.5)
                 });
             }
 
@@ -581,11 +582,11 @@
             c.bone.matrixWorld.decompose(_vA, c.worldQ, _vB);
         }
 
-        // angin halus sitoplasma & faktor bantalan kaki saat bergerak
+        // angin halus sitoplasma + aliran udara lari (gelombang merambat dari pangkal ke ujung ala Wuthering Waves)
         const moveFactor = Math.min(1, speed / 4);
-        const windAmp = (.0018 + Math.min(1, speed / 6) * .0032) * dtScale;
-        const wxBase = Math.sin(t * 1.15) * windAmp;
-        const wzBase = Math.cos(t * .92) * windAmp;
+        const windAmp = (.0028 + moveFactor * .0075) * dtScale;
+        const wxBase = Math.sin(t * 1.35) * windAmp;
+        const wzBase = Math.cos(t * 1.05) * windAmp;
 
         const chains = phys.chains;
         for (let ci = 0; ci < chains.length; ci++) {
@@ -608,17 +609,18 @@
                 pts[k + 1].rest.copy(pts[k].rest).addScaledVector(_vB, nodes[k].worldLen);
             }
 
-            // 2. Integrasi Verlet untuk pts[1..L]
+            // 2. Integrasi Verlet untuk pts[1..L] (inersia bertahap dari pangkal -> ujung supaya berkibar seperti sutra)
             for (let k = 1; k <= L; k++) {
                 const p = pts[k];
-                const cXZ = p.isChest ? chestCarryXZ : carryXZ;
-                const cY = p.isChest ? chestCarryY : carryY;
+                const tf = p.tipFrac || 0;
+                const cXZ = teleported ? 1.0 : (p.isChest ? chestCarryXZ : (carryXZ - tf * .26));
+                const cY = teleported ? 1.0 : (p.isChest ? chestCarryY : (carryY - tf * .12));
                 const cx = dxRoot * cXZ, cy = dyRoot * cY, cz = dzRoot * cXZ;
                 p.pos.x += cx; p.pos.y += cy; p.pos.z += cz;
                 p.prev.x += cx; p.prev.y += cy; p.prev.z += cz;
 
                 _vD.subVectors(p.pos, p.prev).multiplyScalar(1 - p.drag);
-                const maxV = p.len * (p.isChest ? .35 : .24);
+                const maxV = p.len * (p.isChest ? .35 : (.26 + tf * .12));
                 if (_vD.lengthSq() > maxV * maxV) _vD.setLength(maxV);
 
                 p.prev.copy(p.pos);
@@ -626,9 +628,10 @@
                 p.pos.addScaledVector(_vF.subVectors(p.rest, p.pos), Math.min(.75, p.stiffness * dtScale));
                 p.pos.y -= p.gravity * p.len * step;
                 if (!p.isChest) {
-                    const wave = Math.sin(t * 1.45 + ch.chainPhase - k * .42);
-                    p.pos.x += (wxBase + wave * windAmp * .45) * p.len;
-                    p.pos.z += (wzBase + wave * windAmp * .35) * p.len;
+                    const wave = Math.sin(t * (1.6 + moveFactor * 1.4) + ch.chainPhase - k * .52);
+                    const flutter = .35 + tf * .85;
+                    p.pos.x += (wxBase + wave * windAmp * .65) * p.len * flutter;
+                    p.pos.z += (wzBase + wave * windAmp * .55) * p.len * flutter;
                 }
             }
 
