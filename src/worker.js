@@ -128,9 +128,31 @@ async function handleR2Asset(request, env, rawPath) {
     return null;
   }
 
-  const obj = request.method === 'HEAD'
+  let obj = request.method === 'HEAD'
     ? await env.MMD_BUCKET.head(key)
     : await env.MMD_BUCKET.get(key);
+
+  // Fallback case-insensitive: file .pmx buatan Windows sering berbeda huruf besar/kecil (mis. .PNG vs .png, Tex/ vs tex/)
+  if (!obj) {
+    const slash = key.indexOf('/');
+    const prefix = slash > 0 ? key.slice(0, slash + 1) : '';
+    const wantLower = key.toLowerCase();
+    let cursor;
+    let matchedKey = null;
+    for (let page = 0; page < 10 && !matchedKey; page++) {
+      const res = await env.MMD_BUCKET.list({ prefix, cursor, limit: 1000 });
+      for (const o of res.objects || []) {
+        if (o.key.toLowerCase() === wantLower) { matchedKey = o.key; break; }
+      }
+      if (!res.truncated || !res.cursor) break;
+      cursor = res.cursor;
+    }
+    if (matchedKey) {
+      obj = request.method === 'HEAD'
+        ? await env.MMD_BUCKET.head(matchedKey)
+        : await env.MMD_BUCKET.get(matchedKey);
+    }
+  }
   if (!obj) return null;
 
   const headers = new Headers();
