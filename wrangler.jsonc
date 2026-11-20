@@ -16,6 +16,12 @@
       }
     ]
   },
+  "r2_buckets": [
+    {
+      "binding": "MMD_BUCKET",
+      "bucket_name": "cellbound-model"
+    }
+  ],
   "migrations": [
     {
       "tag": "v1",

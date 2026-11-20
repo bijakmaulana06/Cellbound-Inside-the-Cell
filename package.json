@@ -8,6 +8,7 @@
     "start": "node server.js",
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
+    "upload:mmd": "node scripts/upload-mmd-r2.mjs",
     "types": "wrangler types"
   },
   "dependencies": {
