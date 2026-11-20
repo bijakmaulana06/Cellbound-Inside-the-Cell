@@ -4,3 +4,8 @@ node_modules/
 worker-configuration.d.ts
 .DS_Store
 Thumbs.db
+
+# Exclude MMD character models (keep folder README & catalog)
+public/models/mmd/*
+!public/models/mmd/README.txt
+!public/models/mmd/characters.json

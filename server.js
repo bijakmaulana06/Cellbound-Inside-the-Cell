@@ -25,19 +25,121 @@ const MIME = {
   '.svg': 'image/svg+xml',
   '.glb': 'model/gltf-binary',
   '.gltf': 'model/gltf+json',
+  '.fbx': 'application/octet-stream',
+  '.pmx': 'application/octet-stream',
+  '.pmd': 'application/octet-stream',
+  '.vmd': 'application/octet-stream',
+  '.vpd': 'text/plain; charset=utf-8',
+  '.tga': 'application/octet-stream',
+  '.bmp': 'image/bmp',
+  '.webp': 'image/webp',
+  '.spa': 'application/octet-stream',
+  '.sph': 'application/octet-stream',
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
   '.json': 'application/json',
 };
 
+const MMD_DIR = path.join(PUB, 'models', 'mmd');
+
+function encodeRelPath(rel) {
+  return rel
+    .split(/[/\\]+/)
+    .filter(Boolean)
+    .map((seg) => encodeURIComponent(seg))
+    .join('/');
+}
+
+function scanMmdDirectory() {
+  const list = [
+    {
+      id: 'cellcy-default',
+      name: 'Cellcy',
+      subtitle: 'Karakter Bawaan · FBX Rig',
+      type: 'fbx',
+      format: 'FBX',
+      url: 'models/cellcy_full_rigged.fbx',
+      builtin: true,
+    },
+  ];
+
+  if (!fs.existsSync(MMD_DIR)) return list;
+
+  const found = [];
+  function walk(dir, depth) {
+    if (depth > 4) return;
+    let entries;
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+
+    const files = entries.filter((e) => e.isFile()).map((e) => e.name);
+    const pmxFiles = files.filter((n) => /\.(pmx|pmd)$/i.test(n));
+    const thumbFile =
+      files.find((n) => /^(preview|thumb|thumbnail|icon|cover|avatar)\.(png|jpe?g|webp|bmp)$/i.test(n)) || null;
+    const vmdFiles = files.filter((n) => /\.vmd$/i.test(n));
+
+    for (const file of pmxFiles) {
+      const fullPath = path.join(dir, file);
+      const relFromPub = path.relative(PUB, fullPath).replace(/\\/g, '/');
+      const relFromMmd = path.relative(MMD_DIR, dir).replace(/\\/g, '/');
+      const baseName = file.replace(/\.(pmx|pmd)$/i, '');
+      const folderName = relFromMmd ? relFromMmd.split('/').pop() : '';
+      const displayName =
+        folderName && pmxFiles.length === 1
+          ? folderName
+          : folderName && baseName.toLowerCase() !== folderName.toLowerCase()
+          ? `${folderName} · ${baseName}`
+          : baseName;
+
+      const thumbUrl = thumbFile
+        ? encodeRelPath(path.relative(PUB, path.join(dir, thumbFile)))
+        : null;
+
+      found.push({
+        id: 'mmd:' + relFromPub.toLowerCase(),
+        name: displayName,
+        subtitle: relFromMmd ? `models/mmd/${relFromMmd}` : 'models/mmd',
+        type: 'mmd',
+        format: path.extname(file).slice(1).toUpperCase(),
+        url: encodeRelPath(relFromPub),
+        thumb: thumbUrl,
+        vmds: vmdFiles.map((v) => encodeRelPath(path.relative(PUB, path.join(dir, v)))),
+      });
+    }
+
+    for (const e of entries) {
+      if (e.isDirectory() && !e.name.startsWith('.') && e.name !== '__MACOSX') {
+        walk(path.join(dir, e.name), depth + 1);
+      }
+    }
+  }
+
+  walk(MMD_DIR, 0);
+  found.sort((a, b) => a.name.localeCompare(b.name, 'id', { sensitivity: 'base' }));
+  return list.concat(found);
+}
+
 // HTTP Server untuk menyajikan file statis
 const srv = http.createServer((req, res) => {
   let u;
   try {
-    u = decodeURIComponent(req.url.split('?')[0]);
+    u = decodeURIComponent(req.url.split('?')[0]).replace(/\\/g, '/');
   } catch {
     res.writeHead(400);
     return res.end();
+  }
+
+  // API daftar karakter dari folder direktori public/models/mmd/
+  if (u === '/api/characters') {
+    const characters = scanMmdDirectory();
+    res.writeHead(200, {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Cache-Control': 'no-cache',
+    });
+    return res.end(JSON.stringify({ dir: 'public/models/mmd', characters }));
   }
 
   // Routing halaman
@@ -57,7 +159,7 @@ const srv = http.createServer((req, res) => {
       return res.end('404 Not Found');
     }
     res.writeHead(200, {
-      'Content-Type': MIME[path.extname(f)] || 'application/octet-stream',
+      'Content-Type': MIME[path.extname(f).toLowerCase()] || 'application/octet-stream',
       'Cache-Control': 'no-cache',
     });
     res.end(data);

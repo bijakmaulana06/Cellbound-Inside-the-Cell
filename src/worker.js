@@ -18,9 +18,11 @@ export default {
       return stub.fetch(request);
     }
 
-    // 2. Pemetaan rute halaman ke berkas statis
+    // 2. Pemetaan rute halaman & API daftar karakter statis
     let targetPath = url.pathname;
-    if (targetPath === '/' || targetPath === '') {
+    if (targetPath === '/api/characters') {
+      targetPath = '/models/mmd/characters.json';
+    } else if (targetPath === '/' || targetPath === '') {
       targetPath = '/home.html';
     } else if (targetPath === '/play') {
       targetPath = '/index.html';

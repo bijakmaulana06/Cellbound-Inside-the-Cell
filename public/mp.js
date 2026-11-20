@@ -6,8 +6,8 @@ let WS=null,myId=null,myName='',qa=null,qLock=false,lastSec=-1,sendT=0,lx=1e9,lz
 const peers=new Map(),send=o=>{if(WS&&WS.readyState===1)WS.send(JSON.stringify(o))};
 const bd=document.createElement('div');bd.className='hud';bd.style.cssText='left:auto;right:12px;display:none;max-width:215px';document.body.appendChild(bd);
 const eb=document.createElement('div');eb.id='emo';eb.innerHTML=EM.map((e,i)=>`<button data-i="${i}">${e}</button>`).join('');document.body.appendChild(eb);
-eb.onclick=e=>{const b=e.target.closest('button');if(!b)return;const i=+b.dataset.i;if(window.charEmote)charEmote(i);if(MP)send({t:'emo',i})};
-addEventListener('keydown',e=>{if(e.target.tagName==='INPUT'||!/^[1-4]$/.test(e.key))return;const i=+e.key-1;if(window.charEmote)charEmote(i);if(MP)send({t:'emo',i})});
+eb.onclick=e=>{const b=e.target.closest('button');if(b&&MP)send({t:'emo',i:+b.dataset.i})};
+addEventListener('keydown',e=>{if(MP&&e.target.tagName!=='INPUT'&&/^[1-4]$/.test(e.key))send({t:'emo',i:+e.key-1})});
 function mkLabel(name,color){const el=document.createElement('div');el.className='lbl';el.style.borderColor=color;el.style.color=color;const em=document.createElement('span');em.style.marginRight='4px';el.appendChild(em);el.appendChild(document.createTextNode(name));LBL.appendChild(el);return el}
 function addPeer(p){if(peers.has(p.id))return;
  const g=new T.Group();g.position.set(p.x,0,p.z);S.add(g);
@@ -45,7 +45,7 @@ function onMsg(d){switch(d.t){
  case 'left':delPeer(d.id);break;
  case 'snap':for(const[id,x,z]of d.p){const p=peers.get(id);if(p){p.tx=x;p.tz=z}}break;
  case 'board':BOARD=d.board;if(MP)drawBoard();break;
- case 'emote':{const p=d.id===myId?{el:me}:peers.get(d.id);if(p&&p.el)emote(p.el,d.i);if(d.id!==myId&&p&&p.av)p.av.emote(d.i);break}
+ case 'emote':{const p=d.id===myId?{el:me}:peers.get(d.id);if(p&&p.el)emote(p.el,d.i);break}
  case 'mode':if(d.mode==='quiz'){close();phase='challenge';target=null;toast('Kuis balapan dimulai! Klik organel yang benar secepat mungkin.',false,3000)}break;
  case 'q':close();phase='challenge';qa={...d,t0:performance.now()};qLock=false;lastSec=-1;$('q').style.display='block';renderQ();$('toast').style.display='none';break;
  case 'ack':qLock=true;renderQ();break;

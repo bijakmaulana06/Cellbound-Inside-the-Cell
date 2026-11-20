@@ -1,0 +1,14 @@
+{
+  "dir": "public/models/mmd",
+  "characters": [
+    {
+      "id": "cellcy-default",
+      "name": "Cellcy",
+      "subtitle": "Karakter Bawaan · FBX Rig",
+      "type": "fbx",
+      "format": "FBX",
+      "url": "models/cellcy_full_rigged.fbx",
+      "builtin": true
+    }
+  ]
+}
