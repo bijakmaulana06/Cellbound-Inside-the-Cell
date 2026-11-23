@@ -17,16 +17,15 @@
     {
       "id": "nucleo-lp",
       "name": "Nucleo",
-      "subtitle": "Karakter Robot · FBX Rig",
-      "type": "fbx",
-      "format": "FBX",
+      "subtitle": "Karakter Robot · GLB Rig",
+      "type": "glb",
+      "format": "GLB",
       "icon": "🤖",
-      "url": "models/Nucleo_Complete.fbx",
+      "url": "models/Nucleo_Complete.glb",
       "parts": [
-        "models/Nucleo_Complete.fbx.part0",
-        "models/Nucleo_Complete.fbx.part1",
-        "models/Nucleo_Complete.fbx.part2",
-        "models/Nucleo_Complete.fbx.part3"
+        "models/Nucleo_Complete.glb.part0",
+        "models/Nucleo_Complete.glb.part1",
+        "models/Nucleo_Complete.glb.part2"
       ],
       "builtin": true
     }

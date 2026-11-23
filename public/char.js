@@ -18,16 +18,15 @@
         {
             id: 'nucleo-lp',
             name: 'Nucleo',
-            subtitle: 'Karakter Robot · FBX Rig',
-            type: 'fbx',
-            format: 'FBX',
+            subtitle: 'Karakter Robot · GLB Rig',
+            type: 'glb',
+            format: 'GLB',
             icon: '🤖',
-            url: 'models/Nucleo_Complete.fbx',
+            url: 'models/Nucleo_Complete.glb',
             parts: [
-                'models/Nucleo_Complete.fbx.part0',
-                'models/Nucleo_Complete.fbx.part1',
-                'models/Nucleo_Complete.fbx.part2',
-                'models/Nucleo_Complete.fbx.part3'
+                'models/Nucleo_Complete.glb.part0',
+                'models/Nucleo_Complete.glb.part1',
+                'models/Nucleo_Complete.glb.part2'
             ],
             builtin: true
         }
@@ -755,6 +754,11 @@
         if (faceMat.map) maps.push(faceMat.map);
         if (faceMat.emissiveMap && !maps.includes(faceMat.emissiveMap)) maps.push(faceMat.emissiveMap);
         if (!maps.length) return null;
+        for (let i = 0; i < maps.length; i++) {
+            maps[i].wrapS = T.RepeatWrapping;
+            maps[i].wrapT = T.RepeatWrapping;
+            maps[i].needsUpdate = true;
+        }
         return {
             mat: faceMat,
             maps,
@@ -1553,7 +1557,7 @@
 
         if (typeof toast === 'function' && (!window.gameLoader || window.gameLoader.isDone())) {
             const boneCount = rig ? rig.length : 0;
-            toast(`Karakter <b>${esc(charDef.name)}</b> siap! (${isMmd ? 'MMD · ' + boneCount + ' bone aktif' : 'FBX Rig'})`, false, 3000);
+            toast(`Karakter <b>${esc(charDef.name)}</b> siap! (${isMmd ? 'MMD · ' + boneCount + ' bone aktif' : (charDef.format || 'FBX') + ' Rig'})`, false, 3000);
         }
 
         // jika masih dalam loading screen awal, tunggu semua tekstur model selesai di-decode lalu pra-render GPU
@@ -1634,6 +1638,7 @@
     }
 
     const fbxLoader = T.FBXLoader ? new T.FBXLoader() : null;
+    const gltfLoader = T.GLTFLoader ? new T.GLTFLoader() : null;
     const mmdLoader = T.MMDLoader ? new T.MMDLoader() : null;
     const fbxBufCache = new Map();
 
@@ -1706,6 +1711,41 @@
                 p => onProgress(def.name, p),
                 err => onError(def, seq, err)
             );
+        } else if (def.type === 'glb' || def.type === 'gltf') {
+            if (!gltfLoader) return onError(def, seq, 'GLTFLoader tidak tersedia');
+            const parts = Array.isArray(def.parts) && def.parts.length ? def.parts : null;
+            if (parts && parts.length) {
+                const basePath = (def.url || 'models/').replace(/[^/]*$/, '');
+                const cacheKey = parts.join('|');
+                const cached = fbxBufCache.get(cacheKey);
+                const bufPromise = cached
+                    ? Promise.resolve(cached)
+                    : fetchPartsWithProgress(parts, def.name, seq).then(ab => { fbxBufCache.set(cacheKey, ab); return ab; });
+                bufPromise.then(ab => {
+                    if (seq !== loadSeq) return;
+                    if (window.gameLoader && !window.gameLoader.isDone()) {
+                        window.gameLoader.set(82, `Menyusun rig & fisika ${def.name}…`, 'Parsing model GLB');
+                    }
+                    gltfLoader.parse(
+                        ab,
+                        basePath,
+                        gltf => mountModel(gltf.scene, def, seq),
+                        err => onError(def, seq, err)
+                    );
+                }).catch(err => onError(def, seq, err));
+            } else {
+                gltfLoader.load(
+                    def.url,
+                    gltf => {
+                        if (window.gameLoader && !window.gameLoader.isDone()) {
+                            window.gameLoader.set(82, `Menyusun rig & fisika ${def.name}…`, 'Parsing model GLB');
+                        }
+                        mountModel(gltf.scene, def, seq);
+                    },
+                    p => onProgress(def.name, p),
+                    err => onError(def, seq, err)
+                );
+            }
         } else {
             if (!fbxLoader) return onError(def, seq, 'FBXLoader tidak tersedia');
             const parts = Array.isArray(def.parts) && def.parts.length
@@ -1791,7 +1831,7 @@
                 : (c.icon || (c.type === 'mmd' ? '✨' : '🚀'));
             const badgeText = c.type === 'mmd'
                 ? `MMD · ${esc(c.format || 'PMX')}`
-                : (c.id === DEFAULT_CHAR.id ? 'DEFAULT · FBX' : 'FBX · RIG');
+                : (c.id === DEFAULT_CHAR.id ? 'DEFAULT · FBX' : `${esc(c.format || 'FBX')} · RIG`);
             return `<button type="button" class="char-item${isSel ? ' sel' : ''}" data-id="${esc(c.id)}" title="${esc(c.subtitle || c.url)}">` +
                 `<div class="char-ico">${icon}</div>` +
                 `<div class="char-name">${esc(c.name)}</div>` +

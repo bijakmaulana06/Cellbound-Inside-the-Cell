@@ -2,6 +2,15 @@
 
 Semua perubahan penting pada **CELLBOUND: Inside The Cell** didokumentasikan di berkas ini.
 
+## [2.0.1] - 2026-11-23
+
+### Diperbaiki & Ditingkatkan
+- **Pemuatan Nucleo Jauh Lebih Cepat via GLB *Lossless* (100% Topologi Asli Utuh)**
+  - Mengonversi `Nucleo_Complete.fbx` (85,23 MiB, 4 bagian) ke format biner **GLB *lossless*** (`public/models/Nucleo_Complete.glb.part0`–`part2`, total 64,22 MiB, ~21,41 MiB per bagian) dengan mempertahankan **100% mesh & topologi asli (697.385 vertex / 1.314.238 poligon)** serta tekstur PNG asli tanpa *decimate*.
+  - Men-bake transformasi UV presisi (`Scale` + `Location`) dan `Apply Scale (1, 1, 1)` langsung pada model agar bebas retakan UV saat dilihat dekat.
+  - Menambahkan dukungan pemuatan paralel + *in-memory cache* untuk aset `.glb` terpecah lewat `GLTFLoader.parse` di `public/char.js`, serta memastikan `RepeatWrapping` pada `Nucleo_LED_Face` agar seluruh 8 ekspresi wajah tetap sinkron.
+  - Menghapus 4 berkas lama `public/models/Nucleo_Complete.fbx.part0`–`part3` dan memperbarui seluruh katalog (`public/models/mmd/characters.json`, `server.js`, `src/worker.js`, `public/char.js`).
+
 ## [2.0.0] - 2026-11-23
 
 ### Ditambahkan
