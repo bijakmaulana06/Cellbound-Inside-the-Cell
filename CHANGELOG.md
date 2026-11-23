@@ -2,6 +2,14 @@
 
 Semua perubahan penting pada **CELLBOUND: Inside The Cell** didokumentasikan di berkas ini.
 
+## [2.0.2] - 2026-11-23
+
+### Diperbaiki & Ditingkatkan
+- **Kompresi Draco untuk Nucleo (`12,91 MiB`, 1 File Tunggal, 100% Topologi Asli)**
+  - Mengaktifkan kompresi geometri **Draco** (level 6, kuantisasi presisi 14-bit untuk posisi & UV) pada `public/models/Nucleo_Complete.glb` sehingga ukuran turun **5×** dari 64,22 MiB (3 bagian) menjadi **12,91 MiB** (1 file tunggal, aman di bawah batas 25 MiB Cloudflare Workers) tanpa mengurangi 1 pun vertex atau poligon (kompresi geometri 11,43×: 53,07 MiB → 4,64 MiB).
+  - Menambahkan decoder Draco *self-hosted* (`public/lib/DRACOLoader.js` & `public/lib/draco/draco_decoder.wasm`, `draco_wasm_wrapper.js`, `draco_decoder.js`), MIME `.wasm: 'application/wasm'` di `server.js`, dan integrasi `DRACOLoader` di `public/index.html` & `public/char.js`.
+  - Menghapus 3 berkas lama `public/models/Nucleo_Complete.glb.part0`–`part2` dan memperbarui katalog di `public/char.js`, `public/models/mmd/characters.json`, `server.js`, dan `src/worker.js`.
+
 ## [2.0.1] - 2026-11-23
 
 ### Diperbaiki & Ditingkatkan

@@ -23,11 +23,6 @@
             format: 'GLB',
             icon: '🤖',
             url: 'models/Nucleo_Complete.glb',
-            parts: [
-                'models/Nucleo_Complete.glb.part0',
-                'models/Nucleo_Complete.glb.part1',
-                'models/Nucleo_Complete.glb.part2'
-            ],
             builtin: true
         }
     ];
@@ -1639,6 +1634,11 @@
 
     const fbxLoader = T.FBXLoader ? new T.FBXLoader() : null;
     const gltfLoader = T.GLTFLoader ? new T.GLTFLoader() : null;
+    if (gltfLoader && T.DRACOLoader) {
+        const dracoLoader = new T.DRACOLoader();
+        dracoLoader.setDecoderPath('lib/draco/');
+        gltfLoader.setDRACOLoader(dracoLoader);
+    }
     const mmdLoader = T.MMDLoader ? new T.MMDLoader() : null;
     const fbxBufCache = new Map();
 

@@ -25,6 +25,7 @@ const MIME = {
   '.svg': 'image/svg+xml',
   '.glb': 'model/gltf-binary',
   '.gltf': 'model/gltf+json',
+  '.wasm': 'application/wasm',
   '.fbx': 'application/octet-stream',
   '.part0': 'application/octet-stream',
   '.part1': 'application/octet-stream',
@@ -75,11 +76,6 @@ function scanMmdDirectory() {
       format: 'GLB',
       icon: '🤖',
       url: 'models/Nucleo_Complete.glb',
-      parts: [
-        'models/Nucleo_Complete.glb.part0',
-        'models/Nucleo_Complete.glb.part1',
-        'models/Nucleo_Complete.glb.part2',
-      ],
       builtin: true,
     },
   ];
