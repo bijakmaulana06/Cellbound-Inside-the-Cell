@@ -1,6 +1,6 @@
 {
   "name": "cellbound-kelas",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "CELLBOUND multiplayer mode kelas",
   "type": "module",
   "main": "src/worker.js",

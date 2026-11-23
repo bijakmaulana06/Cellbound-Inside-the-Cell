@@ -334,6 +334,7 @@ export class GameServer {
           color,
           x: -4,
           z: 10,
+          expr: 'auto',
           found: new Set(),
           score: 0,
           answered: false,
@@ -359,6 +360,7 @@ export class GameServer {
               color: p.color,
               x: p.x,
               z: p.z,
+              expr: p.expr || 'auto',
             })),
           board: this.getBoard(targetRoom),
         });
@@ -372,6 +374,7 @@ export class GameServer {
             color: newPlayer.color,
             x: newPlayer.x,
             z: newPlayer.z,
+            expr: newPlayer.expr,
           },
           ws
         );
@@ -429,6 +432,27 @@ export class GameServer {
           id: player.id,
           i: emoteIdx,
         });
+        break;
+      }
+
+      case 'expr': {
+        if (!player || !room) return;
+        const VALID = ['auto', 'happy', 'normal', 'calm', 'wink', 'surprised', 'angry', 'sad', 'love'];
+        const e = String(msg.e || 'auto');
+        if (!VALID.includes(e)) return;
+        const d = Math.max(0, Math.min(10, +msg.d || 0));
+        if (!d) player.expr = e;
+
+        this.broadcastToPlayers(
+          room,
+          {
+            t: 'expr',
+            id: player.id,
+            e,
+            d,
+          },
+          ws
+        );
         break;
       }
 

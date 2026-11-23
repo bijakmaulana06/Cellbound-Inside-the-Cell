@@ -1,6 +1,8 @@
 // CELLBOUND - modul multiplayer (mode kelas). Memakai variabel global dari index.html.
 (()=>{
 const EM=['👋','👍','🤔','🎉'];
+const EM_EXPR=['happy','wink','surprised','love'];
+const EXPR_ICO={happy:'😊',normal:'🙂',calm:'😌',wink:'😉',surprised:'😮',angry:'😠',sad:'😢',love:'😍'};
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let WS=null,myId=null,myName='',qa=null,qLock=false,lastSec=-1,sendT=0,lx=1e9,lz=1e9,BOARD=[],myCol='#4ff0d0';
 const peers=new Map(),send=o=>{if(WS&&WS.readyState===1)WS.send(JSON.stringify(o))};
@@ -12,13 +14,14 @@ function mkLabel(name,color){const el=document.createElement('div');el.className
 function addPeer(p){if(peers.has(p.id))return;
  const g=new T.Group();g.position.set(p.x,0,p.z);S.add(g);
  const av=window.charPeer?window.charPeer(p.color):null;let c=null,r=null;
- if(av)g.add(av.obj);
+ if(av){g.add(av.obj);if(p.expr&&av.setExpression)av.setExpression(p.expr)}
  else{// cadangan sebelum model 3D siap
   c=new T.Mesh(new T.IcosahedronGeometry(.45,2),new T.MeshStandardMaterial({color:p.color,emissive:p.color,emissiveIntensity:.8}));c.position.y=1.3;
   r=new T.Mesh(new T.TorusGeometry(.8,.05,8,36),new T.MeshBasicMaterial({color:p.color}));r.rotation.x=Math.PI/2;r.position.y=1.3;g.add(c,r)}
- peers.set(p.id,{g,av,c,r,el:mkLabel(p.name,p.color),tx:p.x,tz:p.z,ph:Math.random()*6})}
+ peers.set(p.id,{g,av,c,r,el:mkLabel(p.name,p.color),tx:p.x,tz:p.z,ph:Math.random()*6,expr:p.expr||'auto'})}
 function delPeer(id){const p=peers.get(id);if(!p)return;S.remove(p.g);p.el.remove();peers.delete(id)}
 function emote(el,i){const s=el.firstChild;s.textContent=EM[i];clearTimeout(el._t);el._t=setTimeout(()=>s.textContent='',2500)}
+function flashBadge(el,ico){if(!el||!ico)return;const s=el.firstChild;s.textContent=ico;clearTimeout(el._t);el._t=setTimeout(()=>s.textContent='',2200)}
 function drawBoard(){const L=BOARD.slice().sort((a,b)=>b.score-a.score||b.found-a.found);
  bd.innerHTML=`<b>KELAS ${esc(MP.code)} · ${L.length} SISWA</b><ul style="columns:1">`+L.slice(0,8).map((p,i)=>`<li class="${p.id===myId?'ok':''}" style="opacity:1;${p.id===myId?'':'color:'+p.color}">${i+1}. ${esc(p.name)} · ${p.found}/${IT.length} · <b>${p.score}</b></li>`).join('')+'</ul>'}
 function joinCard(msg){const qs=new URLSearchParams(location.search);
@@ -38,6 +41,7 @@ function onMsg(d){switch(d.t){
  case 'err':joinCard(d.m);break;
  case 'joined':MP={code:d.code};myId=d.id;myCol=d.color;BOARD=d.board;d.players.forEach(addPeer);
   core.material.color.set(myCol);core.material.emissive.set(myCol);if(window.setPlayerColor)window.setPlayerColor(myCol);
+  if(window.getCharExpression){const cur=window.getCharExpression();if(cur&&cur!=='auto')send({t:'expr',e:cur})}
   me=me||mkLabel(myName+' (kamu)',myCol);close();phase='explore';bd.style.display='block';eb.style.display='flex';drawBoard();
   toast(d.mode==='quiz'?'Kuis sedang berlangsung. Tunggu pertanyaan berikutnya!':'Kamu masuk kelas '+d.code+'. Jelajahi sel bersama teman! Tombol 1-4 untuk emote.',false,4000);
   if(d.mode==='quiz')phase='challenge';break;
@@ -45,7 +49,8 @@ function onMsg(d){switch(d.t){
  case 'left':delPeer(d.id);break;
  case 'snap':for(const[id,x,z]of d.p){const p=peers.get(id);if(p){p.tx=x;p.tz=z}}break;
  case 'board':BOARD=d.board;if(MP)drawBoard();break;
- case 'emote':{const p=d.id===myId?{el:me}:peers.get(d.id);if(p&&p.el)emote(p.el,d.i);break}
+ case 'emote':{const p=d.id===myId?{el:me}:peers.get(d.id);if(p&&p.el)emote(p.el,d.i);if(d.id!==myId&&p&&p.av&&p.av.setExpression&&EM_EXPR[d.i])p.av.setExpression(EM_EXPR[d.i],2.5);break}
+ case 'expr':{const p=peers.get(d.id);if(p){if(!d.d)p.expr=d.e;if(p.av&&p.av.setExpression)p.av.setExpression(d.e,d.d||0);if(EXPR_ICO[d.e])flashBadge(p.el,EXPR_ICO[d.e])}break}
  case 'mode':if(d.mode==='quiz'){close();phase='challenge';target=null;toast('Kuis balapan dimulai! Klik organel yang benar secepat mungkin.',false,3000)}break;
  case 'q':close();phase='challenge';qa={...d,t0:performance.now()};qLock=false;lastSec=-1;$('q').style.display='block';renderQ();$('toast').style.display='none';break;
  case 'ack':qLock=true;renderQ();break;
@@ -62,6 +67,7 @@ function renderQ(){if(!qa)return;const left=Math.max(0,Math.ceil(qa.dur-(perform
  $('q').innerHTML=`<small>PERTANYAAN ${qa.i+1}/${qa.n} · ⏱ ${left}s${qLock?' · jawaban terkirim, menunggu...':''}</small>${qa.text}`}
 window.mpAnswer=id=>{if(!qa||qa.over||qLock)return;send({t:'ans',i:qa.i,id})};
 window.mpFound=id=>send({t:'found',id});
+window.mpSendExpr=(e,d=0)=>{if(MP)send(d>0?{t:'expr',e,d}:{t:'expr',e})};
 window.mpTick=(dt,t)=>{if(!MP)return;
  for(const p of peers.values()){const k=Math.min(1,dt*10),mx=p.tx-p.g.position.x,mz=p.tz-p.g.position.z;
   p.g.position.x+=mx*k;p.g.position.z+=mz*k;

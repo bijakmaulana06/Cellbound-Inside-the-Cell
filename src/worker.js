@@ -8,6 +8,7 @@ const DEFAULT_CELLCY = {
   subtitle: 'Karakter Bawaan · FBX Rig',
   type: 'fbx',
   format: 'FBX',
+  icon: '🚀',
   url: 'models/cellcy_full_rigged.fbx',
   parts: [
     'models/cellcy_full_rigged.fbx.part0',
@@ -15,6 +16,26 @@ const DEFAULT_CELLCY = {
   ],
   builtin: true,
 };
+
+const BUILTIN_CHARS = [
+  DEFAULT_CELLCY,
+  {
+    id: 'nucleo-lp',
+    name: 'Nucleo',
+    subtitle: 'Karakter Robot · FBX Rig',
+    type: 'fbx',
+    format: 'FBX',
+    icon: '🤖',
+    url: 'models/Nucleo_Complete.fbx',
+    parts: [
+      'models/Nucleo_Complete.fbx.part0',
+      'models/Nucleo_Complete.fbx.part1',
+      'models/Nucleo_Complete.fbx.part2',
+      'models/Nucleo_Complete.fbx.part3',
+    ],
+    builtin: true,
+  },
+];
 
 const MIME_BY_EXT = {
   '.pmx': 'application/octet-stream',
@@ -102,7 +123,7 @@ async function handleApiCharacters(env) {
 
     found.sort((a, b) => a.name.localeCompare(b.name, 'id'));
     return new Response(
-      JSON.stringify({ dir: 'r2://cellbound-model', characters: [DEFAULT_CELLCY, ...found] }),
+      JSON.stringify({ dir: 'r2://cellbound-model', characters: [...BUILTIN_CHARS, ...found] }),
       {
         headers: {
           'Content-Type': 'application/json; charset=utf-8',

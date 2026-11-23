@@ -13,6 +13,22 @@
         "models/cellcy_full_rigged.fbx.part1"
       ],
       "builtin": true
+    },
+    {
+      "id": "nucleo-lp",
+      "name": "Nucleo",
+      "subtitle": "Karakter Robot · FBX Rig",
+      "type": "fbx",
+      "format": "FBX",
+      "icon": "🤖",
+      "url": "models/Nucleo_Complete.fbx",
+      "parts": [
+        "models/Nucleo_Complete.fbx.part0",
+        "models/Nucleo_Complete.fbx.part1",
+        "models/Nucleo_Complete.fbx.part2",
+        "models/Nucleo_Complete.fbx.part3"
+      ],
+      "builtin": true
     }
   ]
 }

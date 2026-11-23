@@ -28,6 +28,8 @@ const MIME = {
   '.fbx': 'application/octet-stream',
   '.part0': 'application/octet-stream',
   '.part1': 'application/octet-stream',
+  '.part2': 'application/octet-stream',
+  '.part3': 'application/octet-stream',
   '.pmx': 'application/octet-stream',
   '.pmd': 'application/octet-stream',
   '.vmd': 'application/octet-stream',
@@ -60,8 +62,25 @@ function scanMmdDirectory() {
       subtitle: 'Karakter Bawaan · FBX Rig',
       type: 'fbx',
       format: 'FBX',
+      icon: '🚀',
       url: 'models/cellcy_full_rigged.fbx',
       parts: ['models/cellcy_full_rigged.fbx.part0', 'models/cellcy_full_rigged.fbx.part1'],
+      builtin: true,
+    },
+    {
+      id: 'nucleo-lp',
+      name: 'Nucleo',
+      subtitle: 'Karakter Robot · FBX Rig',
+      type: 'fbx',
+      format: 'FBX',
+      icon: '🤖',
+      url: 'models/Nucleo_Complete.fbx',
+      parts: [
+        'models/Nucleo_Complete.fbx.part0',
+        'models/Nucleo_Complete.fbx.part1',
+        'models/Nucleo_Complete.fbx.part2',
+        'models/Nucleo_Complete.fbx.part3',
+      ],
       builtin: true,
     },
   ];
@@ -387,6 +406,7 @@ wss.on('connection', (ws) => {
           color,
           x: -4,
           z: 10,
+          expr: 'auto',
           found: new Set(),
           score: 0,
           answered: false,
@@ -412,6 +432,7 @@ wss.on('connection', (ws) => {
               color: q.color,
               x: q.x,
               z: q.z,
+              expr: q.expr || 'auto',
             })),
           board: getBoard(room),
         });
@@ -425,6 +446,7 @@ wss.on('connection', (ws) => {
             color: pl.color,
             x: pl.x,
             z: pl.z,
+            expr: pl.expr,
           },
           ws
         );
@@ -471,6 +493,17 @@ wss.on('connection', (ws) => {
         const i = msg.i | 0;
         if (i < 0 || i > 3) return;
         broadcastToPlayers(r, { t: 'emote', id: p.id, i });
+        break;
+      }
+
+      case 'expr': {
+        if (!p) return;
+        const VALID = ['auto', 'happy', 'normal', 'calm', 'wink', 'surprised', 'angry', 'sad', 'love'];
+        const e = String(msg.e || 'auto');
+        if (!VALID.includes(e)) return;
+        const d = Math.max(0, Math.min(10, +msg.d || 0));
+        if (!d) p.expr = e;
+        broadcastToPlayers(r, { t: 'expr', id: p.id, e, d }, ws);
         break;
       }
 

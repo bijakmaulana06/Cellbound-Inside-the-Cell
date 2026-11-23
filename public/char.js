@@ -8,10 +8,30 @@
         subtitle: 'Karakter Bawaan · FBX Rig',
         type: 'fbx',
         format: 'FBX',
+        icon: '🚀',
         url: 'models/cellcy_full_rigged.fbx',
         parts: ['models/cellcy_full_rigged.fbx.part0', 'models/cellcy_full_rigged.fbx.part1'],
         builtin: true
     };
+    const BUILTIN_CHARS = [
+        DEFAULT_CHAR,
+        {
+            id: 'nucleo-lp',
+            name: 'Nucleo',
+            subtitle: 'Karakter Robot · FBX Rig',
+            type: 'fbx',
+            format: 'FBX',
+            icon: '🤖',
+            url: 'models/Nucleo_Complete.fbx',
+            parts: [
+                'models/Nucleo_Complete.fbx.part0',
+                'models/Nucleo_Complete.fbx.part1',
+                'models/Nucleo_Complete.fbx.part2',
+                'models/Nucleo_Complete.fbx.part3'
+            ],
+            builtin: true
+        }
+    ];
     const STORAGE_KEY = 'cellbound_char_id';
     const TARGET_H = 5.1, HEAD = TARGET_H;
     const X = new T.Vector3(1, 0, 0), Y = new T.Vector3(0, 1, 0), Z = new T.Vector3(0, 0, 1);
@@ -20,7 +40,7 @@
     const esc = s => String(s || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
     let ready = false, tpl = null, rig = null, mmdExtra = null;
-    let charCatalog = [DEFAULT_CHAR];
+    let charCatalog = [...BUILTIN_CHARS];
     let activeChar = DEFAULT_CHAR, loadedChar = DEFAULT_CHAR;
     let loadSeq = 0;
 
@@ -520,6 +540,390 @@
         return { mesh, chains, colliders, anchors: [...anchorMap.values()], meshScale, prevRootPos: rootPos, rootDelta: new T.Vector3() };
     }
 
+    // ---------- KawaiiPhysics Verlet untuk tulang jubah/kain/rambut pada model FBX (seperti Nucleo Cape) ----------
+    function setupFbxClothPhysics(root, rigList) {
+        if (!root) return null;
+        root.updateMatrixWorld(true);
+        const posedSet = new Set((rigList || []).map(d => d.b));
+        const meshScale = root.getWorldScale(new T.Vector3()).y || 1;
+
+        // Kumpulkan tulang dinamis master (lewati klon duplikat FBXLoader yang namanya sama persis dengan induknya)
+        const clothRe = /(cape|cloak|cloth|mantle|scarf|ribbon|skirt|tail|ponytail|hair)/i;
+        const dynBones = [];
+        const dynSet = new Set();
+        root.traverse(o => {
+            if (!o.isBone || posedSet.has(o)) return;
+            if (o.parent && o.parent.isBone && o.parent.name === o.name) return;
+            if (!clothRe.test(o.name)) return;
+            dynBones.push(o);
+            dynSet.add(o);
+        });
+        if (!dynBones.length) return null;
+
+        // Bangun collider kapsul sederhana di punggung/pinggul/paha agar jubah tidak menembus tubuh saat berlari
+        const byKey = {};
+        for (const d of (rigList || [])) byKey[d.k] = d.b;
+        const colliders = [];
+        const addCap = (bA, bB, rWorld, isLeg) => {
+            if (!bA) return;
+            const pA = bA.getWorldPosition(new T.Vector3());
+            const pB = bB ? bB.getWorldPosition(new T.Vector3()) : pA.clone().add(new T.Vector3(0, -rWorld * .8, 0));
+            const invM = bA.matrixWorld.clone().invert();
+            const localA = pA.clone().applyMatrix4(invM);
+            const localB = pB.clone().applyMatrix4(invM);
+            const worldQ = new T.Quaternion();
+            bA.matrixWorld.decompose(_vA, worldQ, _vB);
+            colliders.push({
+                bone: bA,
+                localA,
+                localB,
+                a: pA.clone(),
+                b: pB.clone(),
+                worldQ,
+                radius: rWorld,
+                isLeg: !!isLeg
+            });
+        };
+        addCap(byKey.chest || byKey.spine, byKey.hips, .58, false);
+        addCap(byKey.hips, null, .55, false);
+        addCap(byKey.lup, byKey.lknee, .38, true);
+        addCap(byKey.rup, byKey.rknee, .38, true);
+
+        const buildColliderList = (tipW, segLen) => {
+            const list = [];
+            const nodeR = Math.max(.08, segLen * .22);
+            for (const c of colliders) {
+                const ab = c.b.clone().sub(c.a);
+                const abSq = ab.lengthSq();
+                const u = abSq > 1e-8 ? clamp(tipW.clone().sub(c.a).dot(ab) / abSq, 0, 1) : 0;
+                const closest = c.a.clone().addScaledVector(ab, u);
+                const diff = tipW.clone().sub(closest);
+                const restDist = diff.length();
+                const fullR = c.radius + nodeR;
+                if (restDist > fullR + segLen * 2.5 + .6) continue;
+                const outW = restDist > 1e-4 ? diff.clone().divideScalar(restDist) : new T.Vector3(0, 0, -1);
+                const outLocal = outW.applyQuaternion(c.worldQ.clone().invert()).normalize();
+                const minR = restDist < fullR ? restDist * .98 : fullR;
+                const movePad = c.isLeg ? (c.radius * .22) : (c.radius * .06);
+                list.push({ c, minR, movePad, outLocal });
+            }
+            return list;
+        };
+
+        const anchorMap = new Map();
+        const visited = new Set();
+        const chains = [];
+        const pendingRoots = dynBones.filter(b => !dynSet.has(b.parent));
+        let chainIdx = 0;
+
+        while (pendingRoots.length) {
+            const rootBone = pendingRoots.shift();
+            if (visited.has(rootBone)) continue;
+            const seq = [];
+            let cur = rootBone;
+            while (cur && dynSet.has(cur) && !visited.has(cur)) {
+                visited.add(cur);
+                seq.push(cur);
+                const kids = cur.children.filter(c => c.isBone && c.name !== cur.name && dynSet.has(c) && !visited.has(c));
+                if (!kids.length) break;
+                cur = kids[0];
+                for (let k = 1; k < kids.length; k++) pendingRoots.push(kids[k]);
+            }
+            if (!seq.length) continue;
+
+            const anchorBone = seq[0].parent;
+            if (!anchorBone) continue;
+            let anchor = anchorMap.get(anchorBone);
+            if (!anchor) {
+                anchor = { bone: anchorBone, q: new T.Quaternion() };
+                anchorMap.set(anchorBone, anchor);
+            }
+
+            const chainLen = seq.length;
+            const chainPhase = (chainIdx++ * 1.17) % 6.283;
+            const nodes = [];
+            const pts = [];
+            const p0W = seq[0].getWorldPosition(new T.Vector3());
+            pts.push({ pos: p0W.clone(), prev: p0W.clone(), rest: p0W.clone(), len: 0, cols: [] });
+
+            for (let i = 0; i < chainLen; i++) {
+                const bone = seq[i];
+                const nextBone = seq[i + 1] || null;
+                let tipLocal = null;
+                if (nextBone && nextBone.position.lengthSq() > 1e-6) {
+                    tipLocal = nextBone.position.clone();
+                } else if (i > 0 && bone.position.lengthSq() > 1e-6) {
+                    // tulang ujung (leaf): lanjutkan searah tulang sebelumnya dengan panjang yang sama
+                    tipLocal = bone.position.clone();
+                } else {
+                    const anyChild = bone.children.find(c => c.isBone && c.name !== bone.name && c.position.lengthSq() > 1e-6);
+                    tipLocal = anyChild ? anyChild.position.clone() : new T.Vector3(0, -.25 / meshScale, 0);
+                }
+
+                const localLen = tipLocal.length();
+                if (localLen < 1e-6) break;
+                const localDir = tipLocal.clone().divideScalar(localLen);
+                const tipW = tipLocal.clone().applyMatrix4(bone.matrixWorld);
+                const baseW = bone.getWorldPosition(new T.Vector3());
+                const worldLen = tipW.distanceTo(baseW);
+                if (worldLen < 1e-4) break;
+
+                const tipFrac = chainLen > 1 ? i / (chainLen - 1) : 1;
+                pts.push({
+                    pos: tipW.clone(),
+                    prev: tipW.clone(),
+                    rest: tipW.clone(),
+                    len: worldLen,
+                    isChest: false,
+                    isCape: true,
+                    tipFrac,
+                    // Tuning jubah heroik (mengalir kuat saat lari/belok & melambai halus saat diam)
+                    stiffness: Math.max(.008, .030 - tipFrac * .022),
+                    drag: clamp(.11 - tipFrac * .055, .05, .12),
+                    gravity: .022 + tipFrac * .018,
+                    cols: buildColliderList(tipW, worldLen)
+                });
+
+                nodes.push({
+                    b: bone,
+                    restQ: bone.quaternion.clone(),
+                    localDir,
+                    worldLen,
+                    isChest: false,
+                    maxAngle: clamp(1.25 / Math.sqrt(chainLen), .42, .68),
+                    smoothRate: 22
+                });
+            }
+
+            if (nodes.length) {
+                chains.push({ anchor, anchorBone, chainPhase, nodes, pts, isChildChain: dynSet.has(anchorBone) });
+            }
+        }
+
+        if (!chains.length) return null;
+        chains.sort((a, b) => (a.isChildChain ? 1 : 0) - (b.isChildChain ? 1 : 0));
+        const rootPos = root.getWorldPosition(new T.Vector3());
+        return { mesh: root, chains, colliders, anchors: [...anchorMap.values()], meshScale, prevRootPos: rootPos, rootDelta: new T.Vector3() };
+    }
+
+    // ---------- sistem ekspresi wajah LED sprite-sheet 4x2 (Nucleo_LED_Face) ----------
+    const LED_EXPRS = [
+        { id: 'auto',      label: 'Auto',   ico: '✨', col: 1, row: 0 },
+        { id: 'happy',     label: 'Senang', ico: '😊', col: 0, row: 0 },
+        { id: 'normal',    label: 'Normal', ico: '🙂', col: 1, row: 0 },
+        { id: 'calm',      label: 'Tenang', ico: '😌', col: 2, row: 0 },
+        { id: 'wink',      label: 'Wink',   ico: '😉', col: 3, row: 0 },
+        { id: 'surprised', label: 'Kaget',  ico: '😮', col: 0, row: 1 },
+        { id: 'angry',     label: 'Marah',  ico: '😠', col: 1, row: 1 },
+        { id: 'sad',       label: 'Sedih',  ico: '😢', col: 2, row: 1 },
+        { id: 'love',      label: 'Cinta',  ico: '😍', col: 3, row: 1 }
+    ];
+    const LED_BY_ID = new Map(LED_EXPRS.map(e => [e.id, e]));
+    let preferredLedMode = 'auto';
+
+    function setupLedFace(root, isClone = false) {
+        if (!root) return null;
+        let faceMesh = null, faceMatIdx = -1, faceMat = null;
+        root.traverse(o => {
+            if (faceMat || !o.isMesh) return;
+            if (!/(led.?face|expr|face.?sheet)/i.test(o.name)) return;
+            const mats = Array.isArray(o.material) ? o.material : [o.material];
+            const idx = mats.findIndex(mm => mm && (mm.map || mm.emissiveMap));
+            if (idx >= 0) { faceMesh = o; faceMatIdx = idx; faceMat = mats[idx]; }
+        });
+        if (!faceMat) return null;
+        if (isClone) {
+            // klon material & tekstur secara independen agar ekspresi tiap pemain di mode kelas tidak saling timpa
+            const cloned = faceMat.clone();
+            if (cloned.map) { cloned.map = cloned.map.clone(); cloned.map.needsUpdate = true; }
+            if (cloned.emissiveMap) {
+                cloned.emissiveMap = (faceMat.emissiveMap === faceMat.map && cloned.map)
+                    ? cloned.map
+                    : cloned.emissiveMap.clone();
+                cloned.emissiveMap.needsUpdate = true;
+            }
+            if (Array.isArray(faceMesh.material)) {
+                const arr = faceMesh.material.slice();
+                arr[faceMatIdx] = cloned;
+                faceMesh.material = arr;
+            } else {
+                faceMesh.material = cloned;
+            }
+            faceMat = cloned;
+        }
+        const maps = [];
+        if (faceMat.map) maps.push(faceMat.map);
+        if (faceMat.emissiveMap && !maps.includes(faceMat.emissiveMap)) maps.push(faceMat.emissiveMap);
+        if (!maps.length) return null;
+        return {
+            mat: faceMat,
+            maps,
+            mode: isClone ? 'auto' : (preferredLedMode || 'auto'),
+            curKey: '',
+            blinkT: 2.2 + Math.random() * 2.5,
+            blinkDur: 0,
+            burstKey: null,
+            burstT: 0,
+            moodT: 5 + Math.random() * 4,
+            moodKey: 'normal',
+            moodDur: 0
+        };
+    }
+
+    function applyLedCell(led, key) {
+        if (!led || !key || led.curKey === key) return;
+        const def = LED_BY_ID.get(key) || LED_BY_ID.get('normal');
+        if (!def) return;
+        led.curKey = key;
+        const ox = def.col * 0.25, oy = def.row * 0.5;
+        for (let i = 0; i < led.maps.length; i++) {
+            led.maps[i].offset.set(ox, oy);
+        }
+    }
+
+    function updateLedFace(led, dt, speed, celebFrac) {
+        if (!led) return;
+        if (led.burstT > 0) {
+            led.burstT = Math.max(0, led.burstT - dt);
+            if (led.burstT <= 0) led.burstKey = null;
+        }
+        // selebrasi penemuan organel -> mata cinta berbinar!
+        if (celebFrac > 0.01) {
+            applyLedCell(led, 'love');
+            return;
+        }
+        // ekspresi sementara (emote 1-4 atau pemicu event)
+        if (led.burstKey && led.burstT > 0) {
+            applyLedCell(led, led.burstKey);
+            return;
+        }
+        // mode manual pilihan pemain
+        if (led.mode && led.mode !== 'auto' && LED_BY_ID.has(led.mode)) {
+            if (led.mode === 'normal') {
+                led.blinkT -= dt;
+                if (led.blinkT <= 0) { led.blinkDur = .15; led.blinkT = 2.6 + Math.random() * 3.0; }
+                if (led.blinkDur > 0) { led.blinkDur -= dt; applyLedCell(led, 'calm'); return; }
+            }
+            applyLedCell(led, led.mode);
+            return;
+        }
+        // mode Auto: berkedip alami, ceria saat lari, sesekali wink/senang saat diam
+        led.blinkT -= dt;
+        if (led.blinkT <= 0) {
+            led.blinkDur = .15;
+            led.blinkT = 2.4 + Math.random() * 3.0;
+        }
+        if (led.blinkDur > 0) {
+            led.blinkDur -= dt;
+            applyLedCell(led, 'calm');
+            return;
+        }
+        if (speed > 2.0) {
+            applyLedCell(led, 'happy');
+            return;
+        }
+        if (led.moodDur > 0) {
+            led.moodDur -= dt;
+            applyLedCell(led, led.moodKey);
+            return;
+        }
+        led.moodT -= dt;
+        if (led.moodT <= 0) {
+            const picks = ['happy', 'wink', 'happy', 'surprised'];
+            led.moodKey = picks[Math.floor(Math.random() * picks.length)];
+            led.moodDur = 1.8 + Math.random() * 1.4;
+            led.moodT = 5.5 + Math.random() * 5.0;
+            applyLedCell(led, led.moodKey);
+            return;
+        }
+        applyLedCell(led, 'normal');
+    }
+
+    // ---------- panel tombol ganti ekspresi di HUD (muncul otomatis untuk karakter ber-LED face) ----------
+    let exprBarEl = null;
+    function syncExprBar() {
+        const hud = document.getElementById('hud');
+        if (!hud) return;
+        const led = mmdExtra && mmdExtra.ledFace;
+        if (!led) {
+            if (exprBarEl) exprBarEl.style.display = 'none';
+            return;
+        }
+        if (!exprBarEl) {
+            exprBarEl = document.createElement('div');
+            exprBarEl.id = 'hud-expr';
+            exprBarEl.style.cssText = 'margin-top:8px;padding-top:8px;border-top:1px solid rgba(125,211,252,.16);pointer-events:auto';
+            exprBarEl.innerHTML =
+                '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;font-size:10px;color:var(--mut);letter-spacing:.4px">' +
+                '<span>EKSPRESI · <b id="hud-expr-lbl" style="color:#4ff0d0">Auto</b></span>' +
+                '<span style="opacity:.75">Tombol X</span></div>' +
+                '<div id="hud-expr-row" style="display:grid;grid-template-columns:repeat(9,1fr);gap:3px">' +
+                LED_EXPRS.map(e =>
+                    `<button type="button" data-expr="${e.id}" title="${e.label}" style="padding:3px 0;font-size:13px;line-height:1.2;border-radius:6px;border:1px solid rgba(125,211,252,.22);background:rgba(8,36,52,.78);color:#e8fbff;cursor:pointer;transition:.12s">${e.ico}</button>`
+                ).join('') + '</div>';
+            hud.appendChild(exprBarEl);
+            exprBarEl.addEventListener('click', ev => {
+                const btn = ev.target.closest('button[data-expr]');
+                if (!btn) return;
+                window.setCharExpression(btn.dataset.expr);
+            });
+        }
+        exprBarEl.style.display = 'block';
+        const mode = led.mode || 'auto';
+        const def = LED_BY_ID.get(mode) || LED_EXPRS[0];
+        const lbl = document.getElementById('hud-expr-lbl');
+        if (lbl) lbl.textContent = def.label;
+        exprBarEl.querySelectorAll('button[data-expr]').forEach(btn => {
+            const on = btn.dataset.expr === mode;
+            btn.style.borderColor = on ? '#4ff0d0' : 'rgba(125,211,252,.22)';
+            btn.style.background = on ? 'rgba(79,240,208,.24)' : 'rgba(8,36,52,.78)';
+            btn.style.boxShadow = on ? '0 0 8px rgba(79,240,208,.35)' : 'none';
+        });
+    }
+
+    window.setCharExpression = (id, durationSec = 0) => {
+        const led = mmdExtra && mmdExtra.ledFace;
+        const key = LED_BY_ID.has(id) ? id : 'auto';
+        if (typeof window.mpSendExpr === 'function') window.mpSendExpr(key, durationSec);
+        if (!led) return;
+        if (durationSec > 0 && key !== 'auto') {
+            led.burstKey = key;
+            led.burstT = durationSec;
+            applyLedCell(led, key);
+            return;
+        }
+        preferredLedMode = key;
+        led.mode = key;
+        led.burstKey = null;
+        led.burstT = 0;
+        if (key !== 'auto') applyLedCell(led, key);
+        syncExprBar();
+    };
+    window.getCharExpression = () => preferredLedMode || 'auto';
+
+    // pintasan keyboard: X untuk ganti ekspresi, 1-4 (emote) juga memicu ekspresi wajah
+    addEventListener('keydown', e => {
+        if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
+        const led = mmdExtra && mmdExtra.ledFace;
+        if (!led) return;
+        if (e.key === 'x' || e.key === 'X') {
+            const idx = LED_EXPRS.findIndex(x => x.id === (led.mode || 'auto'));
+            const next = LED_EXPRS[(idx + 1) % LED_EXPRS.length];
+            window.setCharExpression(next.id);
+            if (typeof toast === 'function') toast(`Ekspresi Nucleo: <b>${next.ico} ${next.label}</b>`, false, 1400);
+        } else if (/^[1-4]$/.test(e.key)) {
+            const emoMap = { '1': 'happy', '2': 'wink', '3': 'surprised', '4': 'love' };
+            window.setCharExpression(emoMap[e.key], 2.5);
+        }
+    });
+
+    function setupFbxExtras(root, rigList, isClone = false) {
+        const physics = setupFbxClothPhysics(root, rigList);
+        const ledFace = setupLedFace(root, isClone);
+        if (!physics && !ledFace) return null;
+        return { grantSolver: null, grantRest: [], chestSprings: null, physics, ledFace, blinkMesh: null, blinkIdx: -1, blinkTimer: 99, blinkDur: 0 };
+    }
+
     // dorong satu titik keluar dari daftar collider kapsul dengan arah outward-normal
     function resolvePointColliders(px, py, pz, cols, moveFactor, outVec) {
         let hit = false;
@@ -555,7 +959,7 @@
         return hit;
     }
 
-    function updateMmdPhysics(phys, dt, t, speed) {
+    function updateMmdPhysics(phys, dt, t, speed, actorYaw = 0) {
         if (!phys || !phys.chains.length) return;
         const step = Math.min(dt, .033);
         const dtScale = step * 60;
@@ -574,6 +978,10 @@
         const chestCarryXZ = teleported ? 1.0 : .55;
         const chestCarryY = teleported ? 1.0 : .0;
         const dxRoot = phys.rootDelta.x, dyRoot = phys.rootDelta.y, dzRoot = phys.rootDelta.z;
+
+        // arah belakang & samping karakter di ruang dunia untuk dorongan angin aerodinamis jubah
+        const backX = -Math.sin(actorYaw), backZ = -Math.cos(actorYaw);
+        const rightX = Math.cos(actorYaw), rightZ = -Math.sin(actorYaw);
 
         // update rotasi dunia collider kinematik
         const cols = phys.colliders;
@@ -615,21 +1023,33 @@
             for (let k = 1; k <= L; k++) {
                 const p = pts[k];
                 const tf = p.tipFrac || 0;
-                const cXZ = teleported ? 1.0 : (p.isChest ? chestCarryXZ : Math.max(.32, carryXZ - tf * .22));
-                const cY = teleported ? 1.0 : (p.isChest ? chestCarryY : Math.max(.10, carryY - tf * .10));
+                const cXZ = teleported ? 1.0 : (p.isChest ? chestCarryXZ : (p.isCape ? Math.max(.04, .26 - tf * .22) : Math.max(.32, carryXZ - tf * .22)));
+                const cY = teleported ? 1.0 : (p.isChest ? chestCarryY : (p.isCape ? Math.max(.0, .08 - tf * .08) : Math.max(.10, carryY - tf * .10)));
                 const cx = dxRoot * cXZ, cy = dyRoot * cY, cz = dzRoot * cXZ;
                 p.pos.x += cx; p.pos.y += cy; p.pos.z += cz;
                 p.prev.x += cx; p.prev.y += cy; p.prev.z += cz;
 
                 _vD.subVectors(p.pos, p.prev).multiplyScalar(1 - p.drag);
-                const maxV = p.len * (p.isChest ? .35 : (.24 + tf * .10));
+                const maxV = p.len * (p.isChest ? .35 : (p.isCape ? (.45 + tf * .20) : (.24 + tf * .10)));
                 if (_vD.lengthSq() > maxV * maxV) _vD.setLength(maxV);
 
                 p.prev.copy(p.pos);
                 p.pos.add(_vD);
                 p.pos.addScaledVector(_vF.subVectors(p.rest, p.pos), Math.min(.5, p.stiffness * dtScale));
                 p.pos.y -= p.gravity * p.len * step;
-                if (!p.isChest) {
+                if (p.isCape) {
+                    // Dorongan aerodinamis ke belakang + sedikit terangkat saat berlari, plus riak ombak kain yang jelas!
+                    const flutter = .42 + tf * 1.15;
+                    const runPush = moveFactor * (.038 + tf * .055) * p.len * dtScale;
+                    const runLift = moveFactor * (.016 + tf * .026) * p.len * dtScale;
+                    const ripple = Math.sin(t * (2.6 + moveFactor * 5.4) + ch.chainPhase - k * 1.15);
+                    const sideRipple = Math.cos(t * (2.1 + moveFactor * 4.2) + ch.chainPhase * 1.3 - k * .95);
+                    const breezeBack = (.010 + moveFactor * .026) * ripple * p.len * flutter * dtScale;
+                    const breezeSide = (.008 + moveFactor * .020) * sideRipple * p.len * flutter * dtScale;
+                    p.pos.x += backX * (runPush + breezeBack) + rightX * breezeSide;
+                    p.pos.z += backZ * (runPush + breezeBack) + rightZ * breezeSide;
+                    p.pos.y += runLift + Math.abs(ripple) * moveFactor * .010 * p.len * flutter * dtScale;
+                } else if (!p.isChest) {
                     const wave = Math.sin(t * (1.7 + moveFactor * 1.5) + ch.chainPhase - k * .58);
                     const flutter = .30 + tf * 1.0;
                     p.pos.x += (wxBase + wave * windAmp * .75) * p.len * flutter;
@@ -762,7 +1182,7 @@
         return extras;
     }
 
-    function updateMmdExtras(extras, dt, t = 0, speed = 0, phase = 0, move = 0, turnRate = 0, bodyY = 0, actorYaw = 0) {
+    function updateMmdExtras(extras, dt, t = 0, speed = 0, phase = 0, move = 0, turnRate = 0, bodyY = 0, actorYaw = 0, celebFrac = 0) {
         if (!extras) return;
         // 1. Jalankan pegas dada SEBELUM GrantSolver agar model yang memakai grant dada (seperti Iuno: 左胸 -> 左胸1)
         // langsung mewariskan pantulan dada ke mesh skinning pada frame yang sama!
@@ -777,7 +1197,10 @@
             if (extras.physics && extras.physics.mesh) extras.physics.mesh.updateMatrixWorld(true);
         }
         if (extras.physics) {
-            updateMmdPhysics(extras.physics, dt, t, speed);
+            updateMmdPhysics(extras.physics, dt, t, speed, actorYaw);
+        }
+        if (extras.ledFace) {
+            updateLedFace(extras.ledFace, dt, speed, celebFrac);
         }
         if (extras.blinkMesh && extras.blinkIdx >= 0) {
             extras.blinkTimer -= dt;
@@ -922,16 +1345,27 @@
         setBone(bones, 'head', lookPitch * .58, lookYaw * .55, lookRoll * .55);
     }
 
-    // ---------- material PBR mewah untuk FBX Cellcy ----------
+    // ---------- material PBR mewah untuk FBX Cellcy & Nucleo ----------
     function upgradeFbxMaterial(m, isSkinned) {
         if (!m) return m;
         if (m.map) m.map.anisotropy = 8;
+        if (m.emissiveMap) m.emissiveMap.anisotropy = 8;
+        const hasEmitMap = !!m.emissiveMap;
+        const emitHex = m.emissive && m.emissive.isColor ? m.emissive.getHex() : 0;
+        const hasColoredEmit = !hasEmitMap && emitHex !== 0 && emitHex !== 0xffffff;
         const std = new T.MeshPhysicalMaterial({
             name: m.name || 'CellcyMat',
             color: m.color ? m.color.clone() : new T.Color(0xffffff),
             map: m.map || null,
             normalMap: m.normalMap || null,
             normalScale: new T.Vector2(.9, .9),
+            emissive: hasEmitMap
+                ? (m.emissive ? m.emissive.clone() : new T.Color(0xffffff))
+                : (hasColoredEmit ? m.emissive.clone() : new T.Color(0x000000)),
+            emissiveMap: m.emissiveMap || null,
+            emissiveIntensity: hasEmitMap ? .85 : (hasColoredEmit ? .55 : 0),
+            transparent: !!m.transparent,
+            opacity: m.opacity !== undefined ? m.opacity : 1,
             roughness: .36,
             metalness: .06,
             clearcoat: .55,
@@ -1019,25 +1453,65 @@
                 if (!isMmd && o.geometry && o.geometry.attributes && o.geometry.attributes.color) {
                     o.geometry.deleteAttribute('color');
                 }
+                if (!isMmd && o.geometry && o.geometry.attributes && o.geometry.attributes.uv) {
+                    const uv = o.geometry.attributes.uv;
+                    let minU = Infinity, maxU = -Infinity, minV = Infinity, maxV = -Infinity;
+                    const step = Math.max(1, Math.floor(uv.count / 4096));
+                    for (let i = 0; i < uv.count; i += step) {
+                        const u = uv.getX(i), v = uv.getY(i);
+                        if (u < minU) minU = u; if (u > maxU) maxU = u;
+                        if (v < minV) minV = v; if (v > maxV) maxV = v;
+                    }
+                    // perbaikan otomatis FBX yang UV-nya terkompresi 1/16 di sudut kiri-atas [0..0.0625] x [0.9375..1]
+                    if (minU >= -0.001 && maxU <= 0.065 && minV >= 0.935 && maxV <= 1.001) {
+                        const arr = uv.array;
+                        for (let i = 0; i < arr.length; i += 2) {
+                            arr[i] = arr[i] * 16;
+                            arr[i + 1] = (arr[i + 1] - 0.9375) * 16;
+                        }
+                        uv.needsUpdate = true;
+                        o.userData._uvExpanded16 = true;
+                    }
+                }
                 const mats = Array.isArray(o.material) ? o.material : [o.material];
-                const next = mats.map(m => isMmd ? polishMmdMaterial(m, o.isSkinnedMesh) : upgradeFbxMaterial(m, o.isSkinnedMesh));
+                const next = mats.map(m => {
+                    const up = isMmd ? polishMmdMaterial(m, o.isSkinnedMesh) : upgradeFbxMaterial(m, o.isSkinnedMesh);
+                    if (o.userData._uvExpanded16 && up) {
+                        if (up.map) up.map.repeat.set(1, 1);
+                        if (up.normalMap) up.normalMap.repeat.set(1, 1);
+                    }
+                    return up;
+                });
                 o.material = Array.isArray(o.material) ? next : next[0];
             }
         });
 
-        // orientasi awal: FBX AccuRig Z-up -> Y-up; MMD sudah Y-up
+        // orientasi awal: deteksi otomatis Z-up (AccuRig) vs Y-up (Blender/Mixamo/MMD) & arah hadap (+Z)
+        tpl.updateMatrixWorld(true);
         if (!isMmd) {
-            tpl.rotation.x = -Math.PI / 2;
-        } else {
-            // deteksi otomatis arah hadap MMD (+Z vs -Z) dari posisi bahu kiri vs kanan
-            tpl.updateMatrixWorld(true);
-            const la = findBone(tpl, ['左腕', 'leftarm', 'upperarml', 'arml']);
-            const ra = findBone(tpl, ['右腕', 'rightarm', 'upperarmr', 'armr']);
-            if (la && ra) {
-                const lp = la.getWorldPosition(new T.Vector3());
-                const rp = ra.getWorldPosition(new T.Vector3());
-                if (lp.x < rp.x) tpl.rotation.y = Math.PI;
+            const headB = findBone(tpl, ['head', 'mixamorighead', 'ccbasehead', 'neck', 'neck01', 'mixamorigneck']);
+            const baseB = findBone(tpl, ['hips', 'pelvis', 'mixamorighips', 'ccbasepelvis', 'leftfoot', 'footl', 'mixamorigleftfoot']);
+            if (headB && baseB) {
+                const hp = headB.getWorldPosition(new T.Vector3());
+                const bp = baseB.getWorldPosition(new T.Vector3());
+                const dy = hp.y - bp.y;
+                const dz = hp.z - bp.z;
+                if (Math.abs(dz) > Math.abs(dy)) {
+                    tpl.rotation.x = dz > 0 ? -Math.PI / 2 : Math.PI / 2;
+                } else if (dy < 0) {
+                    tpl.rotation.x = Math.PI;
+                }
+            } else {
+                tpl.rotation.x = -Math.PI / 2;
             }
+        }
+        tpl.updateMatrixWorld(true);
+        const la = findBone(tpl, ['左腕', 'leftarm', 'upperarml', 'arml', 'mixamorigleftarm', 'ccbaselupperarm']);
+        const ra = findBone(tpl, ['右腕', 'rightarm', 'upperarmr', 'armr', 'mixamorigrightarm', 'ccbaserupperarm']);
+        if (la && ra) {
+            const lp = la.getWorldPosition(new T.Vector3());
+            const rp = ra.getWorldPosition(new T.Vector3());
+            if (lp.x < rp.x) tpl.rotation.y = Math.PI;
         }
 
         tpl.updateMatrixWorld(true);
@@ -1064,15 +1538,16 @@
         body.scale.set(1, 1, 1);
         lean.rotation.set(0, 0, 0);
         P.updateMatrixWorld(true);
-        // setupMmdExtras dipanggil SETELAH tpl masuk ke P agar posisi awal Verlet (currTip/prevTip)
+        // setupMmdExtras / setupFbxExtras dipanggil SETELAH tpl masuk ke P agar posisi awal Verlet (currTip/prevTip)
         // langsung berada di koordinat dunia pemain P (tidak lompat dari origin 0,0,0 pada frame pertama)
-        mmdExtra = isMmd ? setupMmdExtras(tpl, rig) : null;
+        mmdExtra = isMmd ? setupMmdExtras(tpl, rig) : setupFbxExtras(tpl, rig);
         activeChar = charDef;
         loadedChar = charDef;
         ready = true;
         probe.visible = false;
         hideBadge();
         updateHudLabel(charDef);
+        syncExprBar();
         try { localStorage.setItem(STORAGE_KEY, charDef.id); } catch {}
         syncPickerHighlight();
 
@@ -1279,12 +1754,13 @@
                 if (!res.ok) continue;
                 const data = await res.json();
                 if (data && Array.isArray(data.characters) && data.characters.length) {
-                    charCatalog = data.characters;
+                    const builtinMap = new Map(BUILTIN_CHARS.map(b => [b.id, b]));
+                    charCatalog = data.characters.map(c => builtinMap.has(c.id) ? Object.assign({}, c, builtinMap.get(c.id)) : c);
                     return charCatalog;
                 }
             } catch {}
         }
-        charCatalog = [DEFAULT_CHAR];
+        charCatalog = [...BUILTIN_CHARS];
         return charCatalog;
     };
 
@@ -1302,7 +1778,7 @@
         const refBtn = document.getElementById('char-refresh');
         if (!grid) return;
 
-        if (rescan || charCatalog.length <= 1) {
+        if (rescan || charCatalog.length <= BUILTIN_CHARS.length) {
             grid.innerHTML = '<div style="grid-column:1/-1;padding:16px;text-align:center;color:var(--mut);font-size:13px">Memindai direktori <code>public/models/mmd/</code>…</div>';
             await window.fetchCharacters();
         }
@@ -1312,8 +1788,10 @@
             const isSel = c.id === activeChar.id;
             const icon = c.thumb
                 ? `<img src="${esc(c.thumb)}" alt="${esc(c.name)}" loading="lazy">`
-                : (c.type === 'mmd' ? '✨' : '🚀');
-            const badgeText = c.type === 'mmd' ? `MMD · ${esc(c.format || 'PMX')}` : 'DEFAULT · FBX';
+                : (c.icon || (c.type === 'mmd' ? '✨' : '🚀'));
+            const badgeText = c.type === 'mmd'
+                ? `MMD · ${esc(c.format || 'PMX')}`
+                : (c.id === DEFAULT_CHAR.id ? 'DEFAULT · FBX' : 'FBX · RIG');
             return `<button type="button" class="char-item${isSel ? ' sel' : ''}" data-id="${esc(c.id)}" title="${esc(c.subtitle || c.url)}">` +
                 `<div class="char-ico">${icon}</div>` +
                 `<div class="char-name">${esc(c.name)}</div>` +
@@ -1451,7 +1929,7 @@
         // update matrixWorld seluruh hierarki P sebelum fisika dada, rambut & pakaian MMD
         if (mmdExtra) {
             P.updateMatrixWorld(true);
-            updateMmdExtras(mmdExtra, dt, t, speed, phase, effMove, turnSmooth, body.position.y, face);
+            updateMmdExtras(mmdExtra, dt, t, speed, phase, effMove, turnSmooth, body.position.y, face, celebFrac);
         }
 
         // bayangan kontak mengecil halus saat melompat
@@ -1476,12 +1954,27 @@
         const rg = new T.Mesh(new T.TorusGeometry(1.38, .055, 8, 40), new T.MeshBasicMaterial({ color, transparent: true, opacity: .5, depthWrite: false, blending: T.AdditiveBlending }));
         rg.rotation.x = -Math.PI / 2; rg.position.y = .07; holder.add(rg);
         const bones = rigInfo(root, rig), lean2 = new T.Group();
-        const peerExtra = loadedChar && loadedChar.type === 'mmd' ? setupMmdExtras(root, bones) : null;
+        const peerExtra = loadedChar && loadedChar.type === 'mmd' ? setupMmdExtras(root, bones) : setupFbxExtras(root, bones, true);
         holder.remove(root); lean2.add(root); holder.add(lean2);
         const baseY = root.position.y;
         const st = { phase: Math.random() * 6, face: 0, faceT: 0, turn: 0, mv: 0 };
         return {
             obj: holder,
+            setExpression(id, durationSec = 0) {
+                const led = peerExtra && peerExtra.ledFace;
+                if (!led) return;
+                const key = LED_BY_ID.has(id) ? id : 'auto';
+                if (durationSec > 0 && key !== 'auto') {
+                    led.burstKey = key;
+                    led.burstT = durationSec;
+                    applyLedCell(led, key);
+                } else {
+                    led.mode = key;
+                    led.burstKey = null;
+                    led.burstT = 0;
+                    if (key !== 'auto') applyLedCell(led, key);
+                }
+            },
             update(dt, t, speed, vx, vz) {
                 const isChibiPeer = !loadedChar || loadedChar.type !== 'mmd';
                 const tm = Math.min(1, speed / 6);
